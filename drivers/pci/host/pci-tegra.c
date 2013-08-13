@@ -250,6 +250,7 @@ struct tegra_pcie {
 	int irq;
 
 	struct list_head buses;
+	struct list_head sys;
 	struct resource *cs;
 
 	struct resource all;
@@ -681,6 +682,11 @@ static struct pci_bus *tegra_pcie_scan_bus(int nr, struct pci_sys_data *sys)
 	pci_scan_child_bus(bus);
 
 	return bus;
+}
+
+static void tegra_pcie_teardown(int nr, struct pci_sys_data *sys)
+{
+	pci_iounmap_io(nr * SZ_64K);
 }
 
 static irqreturn_t tegra_pcie_isr(int irq, void *arg)
@@ -1729,7 +1735,9 @@ static int tegra_pcie_enable(struct tegra_pcie *pcie)
 	hw.map_irq = tegra_pcie_map_irq;
 	hw.add_bus = tegra_pcie_add_bus;
 	hw.scan = tegra_pcie_scan_bus;
+	hw.teardown = tegra_pcie_teardown;
 	hw.ops = &tegra_pcie_ops;
+	hw.sys = &pcie->sys;
 
 	pci_common_init_dev(pcie->dev, &hw);
 
@@ -1765,6 +1773,11 @@ static const struct of_device_id tegra_pcie_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, tegra_pcie_of_match);
 
+static void tegra_pcie_debugfs_exit(struct tegra_pcie *pcie)
+{
+	debugfs_remove_recursive(pcie->debugfs);
+}
+
 static int tegra_pcie_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *match;
@@ -1781,6 +1794,7 @@ static int tegra_pcie_probe(struct platform_device *pdev)
 
 	INIT_LIST_HEAD(&pcie->buses);
 	INIT_LIST_HEAD(&pcie->ports);
+	INIT_LIST_HEAD(&pcie->sys);
 	pcie->soc_data = match->data;
 	pcie->dev = &pdev->dev;
 
@@ -1830,14 +1844,43 @@ put_resources:
 	return err;
 }
 
+static int tegra_pcie_remove(struct platform_device *pdev)
+{
+	struct tegra_pcie *pcie = platform_get_drvdata(pdev);
+	struct tegra_pcie_bus *bus, *tmp;
+	int err;
+
+	if (IS_ENABLED(CONFIG_DEBUG_FS))
+		tegra_pcie_debugfs_exit(pcie);
+
+	pci_common_exit(&pcie->sys);
+
+	list_for_each_entry_safe(bus, tmp, &pcie->buses, list) {
+		vunmap(bus->area->addr);
+		kfree(bus);
+	}
+
+	if (IS_ENABLED(CONFIG_PCI_MSI)) {
+		err = tegra_pcie_disable_msi(pcie);
+		if (err < 0)
+			return err;
+	}
+
+	err = tegra_pcie_put_resources(pcie);
+	if (err < 0)
+		return err;
+
+	return 0;
+}
+
 static struct platform_driver tegra_pcie_driver = {
 	.driver = {
 		.name = "tegra-pcie",
 		.owner = THIS_MODULE,
 		.of_match_table = tegra_pcie_of_match,
-		.suppress_bind_attrs = true,
 	},
 	.probe = tegra_pcie_probe,
+	.remove = tegra_pcie_remove,
 };
 module_platform_driver(tegra_pcie_driver);
 
