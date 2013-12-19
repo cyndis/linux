@@ -1,0 +1,201 @@
+What:		/sys/devices/*/<our-device>/fuse
+Date:		February 2014
+Contact:	Peter De Schrijver <pdeschrijver@nvidia.com>
+Description:	read-only access to the efuses on Tegra20, Tegra30, Tegra114
+		and Tegra124 SoC's from NVIDIA. The efuses contain write once
+		data programmed at the factory. The data is layed out in 32bit
+		words in LSB first format. The number of valid bits depends
+		on the word and the SoC. The mapping is as follows:
+
+		For Tegra20:
+		Word 0 - 1    : bit 0
+		Word 2        : unused
+		Word 3        : bits 0 - 31
+		Word 4        : bits 0 - 7
+		Word 5        : bits 0 - 1
+		Word 6        : bits 0 - 9
+		Word 7 - 9    : bits 0 - 7
+		Word 10 - 17  : unused
+		Word 18       : bit 0
+		Word 19       : bits 0 - 3
+		Word 20 - 23  : bits 0 - 5
+		Word 24 - 39  : unused
+		Word 40       : bit 0
+		Word 41 - 45  : bits 0 - 31
+		Word 46       : bit 0
+		Word 47       : bits 0 - 15
+		Word 48       : bits 0 - 7
+		Word 49       : bits 0 - 3
+		Word 50 - 57  : bits 0 - 31
+		Word 58       : bit 0
+		Word 59       : bits 0 - 1
+		Word 60       : bits 0 - 6
+		Word 61       : unused
+		Word 62 - 63  : bits 0 - 1
+		Word 64 - 125 : bit 0
+
+		For Tegra30:
+		Word 0 - 1    :	bit 0
+		Word 2 - 3    :	unused
+		Word 4        :	bits 0 - 7
+		Word 5        :	bits 0 - 31
+		Word 6        :	bits 0 - 15
+		Word 7 - 9    :	bits 0 - 7
+		Word 10       :	bits 0 - 6
+		Word 11 - 16  : unused
+		Word 17       : bits 0 - 1
+		Word 18       : bit 0
+		Word 19 - 23  :	bits 0 - 5
+		Word 24       : bits 0 - 3
+		Word 25 - 34  : unused
+		Word 35       : bits 0 - 31
+		Word 36       : bits 0 - 6
+		Word 37       : bits 0 - 13
+		Word 38       : bits 0 - 31
+		Word 39       : bits 0 - 6
+		Word 40       : bit 0
+		Word 41 - 45  : bits 0 - 31
+		Word 46       : bit 0
+		Word 47       : bits 0 - 15
+		Word 48       : bits 0 - 7
+		Word 49 - 57  : bits 0 - 31
+		Word 58       : bit 0
+		Word 59       : bits 0 - 1
+		Word 60       : bits 0 - 31
+		Word 61       : bits 0 - 7
+		Word 62       : bits 0 - 1
+		Word 63 - 64  : bits 0 - 3
+		Word 65       : bits 0 - 5
+		Word 66       : bits 0 - 31
+		Word 67       : bits 0 - 27
+		Word 68       : bits 0 - 5
+		Word 69 - 70  : bits 0 - 8
+		Word 71	      : unused
+		Word 72       : bits 0 - 5
+		Word 73       : bits 0 - 1
+		Word 74 - 75  : unused
+		Word 76 - 80  : bits 0 - 31
+	        Word 81 - 168 : bit 0
+
+		For Tegra114:
+		Word 0 - 1    :	bit 0
+		Word 2        : bits 0 - 3
+		Word 3        : unused
+		Word 4        :	bits 0 - 7
+		Word 5        :	bits 0 - 10
+		Word 6        :	bits 0 - 12
+		Word 7 - 9    : unused
+		Word 10 - 16  :	bits 0 - 11
+		Word 17       : unused
+		Word 18       : bit 0
+		Word 19       : bits 0 - 3
+		Word 20 - 23  : bits 0 - 7
+		Word 24       : bits 0 - 3
+		Word 25 - 32  : bits 0 - 31
+		Word 33 - 34  : bits 0 - 25
+		Word 35       : bits 0 - 31
+		Word 36       : bits 0 - 10
+		Word 37       : bits 0 - 13
+		Word 38       : bits 0 - 25
+		Word 39       : bits 0 - 6
+		Word 40       : bit 0
+		Word 41 - 45  : bits 0 - 31
+		Word 46       : bit 0
+		Word 47       : bits 0 - 15
+		Word 48       : bits 0 - 8
+		Word 49       : bit 0
+		Word 50 - 57  : bits 0 - 31
+		Word 58       : bit 0
+		Word 59       : bits 0 - 1
+		Word 60       : bits 0 - 31
+		Word 61       : bits 0 - 7
+		Word 62       : bits 0 - 1
+		Word 63 - 64  : bits 0 - 3
+		Word 65       : bits 0 - 5
+		Word 66       : bits 0 - 31
+		Word 67       : bits 0 - 27
+		Word 68       : bits 0 - 5
+		Word 69 - 70  : bits 0 - 8
+		Word 71       : unused
+		Word 72       : bits 0 - 5
+		Word 75       : bits 0 - 25
+		Word 76 - 80  : bits 0 - 31
+		Word 81 - 84  : unused
+		Word 85 - 88  : bits 0 - 25
+		Word 89       : unused
+		Word 90 - 103 : bit 0
+
+		For Tegra124:
+		Word 0 - 1    :	bit 0
+		Word 2        : bits 0 - 3
+		Word 3        : bit 0
+		Word 4        :	bits 0 - 7
+		Word 5        :	bits 0 - 11
+		Word 6        :	bits 0 - 12
+		Word 7 - 9    : unused
+		Word 10       :	bits 0 - 10
+		Word 11 - 16  :	bits 0 - 11
+		Word 17       : unused
+		Word 18       : bit 0
+		Word 19       : bits 0 - 3
+		Word 20 - 23  : bits 0 - 7
+		Word 24       : bits 0 - 3
+		Word 25 - 32  : bits 0 - 31
+		Word 33 - 34  : bits 0 - 25
+		Word 35       : unused
+		Word 36       : bits 0 - 10
+		Word 37       : bits 0 - 13
+		Word 38       : bits 0 - 25
+		Word 39       : bits 0 - 6
+		Word 40       : bit 0
+		Word 41 - 45  : bits 0 - 31
+		Word 46       : bit 0
+		Word 47       : bits 0 - 15
+		Word 48       : bits 0 - 8
+		Word 49       : bit 0
+		Word 50 - 57  : bits 0 - 31
+		Word 58       : bit 0
+		Word 59       : unused
+		Word 60       : bits 0 - 31
+		Word 61       : bits 0 - 7
+		Word 62       : bits 0 - 1
+		Word 63 - 64  : bits 0 - 3
+		Word 65       : bits 0 - 5
+		Word 66       : bits 0 - 31
+		Word 67       : bits 0 - 27
+		Word 68       : bits 0 - 5
+		Word 69 - 70  : bits 0 - 8
+		Word 71       : bit 0
+		Word 72       : bits 0 - 5
+		Word 73       : bits 0 - 1
+		Word 74       : bits 0 - 11
+		Word 75       : bits 0 - 25
+		Word 76 - 80  : bits 0 - 31
+		Word 81       : bit 0
+		Word 82       : unused
+		Word 83 - 84  : bits 0 - 1
+		Word 85 - 88  : bits 0 - 25
+		Word 89 - 90  : bit 0
+		Word 91 - 94  : unused
+		Word 95       : bit 0
+		Word 96       : bits 0 - 25
+		Word 97       : bits 0 - 1
+		Word 98       : bit 0
+		Word 99       : bits 0 - 9
+		Word 100      : unused
+		Word 101      : bits 0 - 31
+		Word 102      : bit 0
+		Word 103      : unused
+		Word 104 - 105: bits 0 - 4
+		Word 106      : bit 0
+		Word 107      : bits 0 - 9
+		Word 108      : bits 0 - 3
+		Word 109      : bits 0 - 15
+		Word 110 - 112: bit 0
+		Word 113      : bits 0 - 7
+		Word 114      : bits 0 - 2
+		Word 115 - 191: unused
+		Word 192 - 255: bit 0
+
+Users:		any user space application which wants to read the efuses on
+		Tegra SoC's

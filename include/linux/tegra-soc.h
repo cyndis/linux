@@ -22,6 +22,9 @@
 #define TEGRA114	0x35
 #define TEGRA124	0x40
 
+#define TEGRA_FUSE_SKU_CALIB_0	0xf0
+#define TEGRA30_FUSE_SATA_CALIB	0x124
+
 #ifndef __ASSEMBLY__
 
 enum tegra_revision {
@@ -37,6 +40,7 @@ enum tegra_revision {
 u32 tegra_read_straps(void);
 u32 tegra_read_chipid(void);
 void tegra_init_fuse(void);
+int tegra_fuse_readl(u32 offset, u32 *val);
 
 extern int tegra_chip_id;
 extern enum tegra_revision tegra_revision;
