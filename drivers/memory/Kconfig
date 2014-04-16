@@ -61,6 +61,15 @@ config TEGRA30_MC
 	  analysis, especially for IOMMU/SMMU(System Memory Management
 	  Unit) module.
 
+config TEGRA124_MC
+	bool "Tegra124 Memory Controller driver"
+	depends on ARCH_TEGRA
+	select IOMMU_API
+	help
+	  This driver is for the Memory Controller module available on
+	  Tegra124 SoCs. It provides an IOMMU that can be used for I/O
+	  virtual address translation.
+
 config FSL_IFC
 	bool
 	depends on FSL_SOC
