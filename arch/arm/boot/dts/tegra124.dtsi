@@ -447,6 +447,11 @@
 		reg = <0x0 0x7000e400 0x0 0x400>;
 		clocks = <&tegra_car TEGRA124_CLK_PCLK>, <&clk32k_in>;
 		clock-names = "pclk", "clk32k_in";
+
+		nvidia,thermtrip-pmu-i2c-addr = <0x40>;
+		nvidia,thermtrip-i2c-controller = <4>;
+		nvidia,thermtrip-reg-addr = <0x36>;
+		nvidia,thermtrip-reg-data = <0x2>;
 	};
 
 	sdhci@0,700b0000 {
@@ -692,6 +697,54 @@
 		nvidia,hsdiscon-level = <5>;
 		nvidia,xcvr-hsslew = <12>;
 		status = "disabled";
+	};
+
+	thermal-zones {
+		cpu {
+			polling-delay-passive = <1000>;
+			polling-delay = <1000>;
+
+			thermal-sensors = <&soctherm 0>;
+		};
+
+		mem {
+			polling-delay-passive = <1000>;
+			polling-delay = <1000>;
+
+			thermal-sensors = <&soctherm 1>;
+		};
+
+		gpu {
+			polling-delay-passive = <1000>;
+			polling-delay = <1000>;
+
+			thermal-sensors = <&soctherm 2>;
+		};
+
+		pllx {
+			polling-delay-passive = <1000>;
+			polling-delay = <1000>;
+
+			thermal-sensors = <&soctherm 3>;
+		};
+	};
+
+	soctherm: soctherm@0,700e2000 {
+		compatible = "nvidia,tegra124-soctherm";
+		reg = <0x0 0x700e2000 0x0 0x1000>;
+		interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&tegra_car TEGRA124_CLK_TSENSOR>,
+			<&tegra_car TEGRA124_CLK_SOC_THERM>;
+		clock-names = "tsensor", "soc-therm";
+		resets = <&tegra_car 78>;
+		reset-names = "soc-therm";
+		status = "okay";
+
+		nvidia,thermtrip-threshold-cpu = <105>;
+		nvidia,thermtrip-threshold-gpu-mem = <105>;
+		nvidia,thermtrip-threshold-tsense = <105>;
+
+		#thermal-sensor-cells = <1>;
 	};
 
 	cpus {

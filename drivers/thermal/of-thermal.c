@@ -389,8 +389,12 @@ thermal_zone_of_sensor_register(struct device *dev, int sensor_id,
 	struct device_node *np, *child, *sensor_np;
 
 	np = of_find_node_by_name(NULL, "thermal-zones");
-	if (!np)
+	if (!np) {
 		return ERR_PTR(-ENODEV);
+		printk("of-thermal: no thermal-zones node\n");
+	}
+
+	printk("of-thermal: point 0 passed\n");
 
 	if (!dev || !dev->of_node)
 		return ERR_PTR(-EINVAL);
@@ -405,8 +409,10 @@ thermal_zone_of_sensor_register(struct device *dev, int sensor_id,
 		ret = of_parse_phandle_with_args(child, "thermal-sensors",
 						 "#thermal-sensor-cells",
 						 0, &sensor_specs);
-		if (ret)
+		if (ret) {
+			printk("ofp failed: %d\n", ret);
 			continue;
+		}
 
 		if (sensor_specs.args_count >= 1) {
 			id = sensor_specs.args[0];
