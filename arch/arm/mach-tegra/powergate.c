@@ -125,6 +125,7 @@ int tegra_powergate_power_on(int id)
 
 	return tegra_powergate_set(id, true);
 }
+EXPORT_SYMBOL(tegra_powergate_power_on);
 
 int tegra_powergate_power_off(int id)
 {
