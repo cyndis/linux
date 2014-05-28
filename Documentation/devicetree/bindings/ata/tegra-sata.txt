@@ -1,0 +1,29 @@
+Tegra124 SoC SATA AHCI controller
+
+Required properties :
+ - compatible : Should be "nvidia,tegra124-ahci".
+ - reg : Defines the following set of registers, in the order listed:
+   - AHCI register set (SATA BAR5)
+   - SATA register set
+ - interrupts : Defines the interrupt used by SATA
+ - clocks : Defines the clocks listed in the clock-names property.
+ - clock-names : The following clock names must be present:
+   - sata
+   - sata-oob
+   - cml1
+   - pll_e
+ - resets : Defines the resets listed in the reset-names property
+ - reset-names : The following reset names must be present:
+   - sata
+   - sata-oob
+   - sata-cold
+ - phys : Defines the phys listed in the phy-names property
+ - phy-names : The following phy names must be present:
+   - sata-phy : XUSB PADCTL SATA PHY
+ - hvdd-supply : Defines the SATA HVDD regulator
+ - vddio-supply : Defines the SATA VDDIO regulator
+ - avdd-supply : Defines the SATA AVDD regulator
+
+Optional properties:
+ - target-supply : Defines a regulator for a power output connector
+                   for SATA devices.
