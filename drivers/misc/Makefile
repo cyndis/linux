@@ -55,4 +55,5 @@ obj-$(CONFIG_SRAM)		+= sram.o
 obj-y				+= mic/
 obj-$(CONFIG_GENWQE)		+= genwqe/
 obj-$(CONFIG_ECHO)		+= echo/
+obj-y				+= fuse/
 obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
