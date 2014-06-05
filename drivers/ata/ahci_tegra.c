@@ -299,14 +299,9 @@ MODULE_DEVICE_TABLE(of, tegra_ahci_of_match);
 
 static int tegra_ahci_probe(struct platform_device *pdev)
 {
-	const struct of_device_id *match;
 	struct ahci_host_priv *hpriv;
 	struct tegra_ahci_priv *tegra;
 	int ret;
-
-	match = of_match_device(tegra_ahci_of_match, &pdev->dev);
-	if (!match)
-		return -EINVAL;
 
 	hpriv = ahci_platform_get_resources(pdev);
 	if (IS_ERR(hpriv))
