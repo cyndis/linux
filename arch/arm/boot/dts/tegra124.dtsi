@@ -756,6 +756,18 @@
 		status = "disabled";
 	};
 
+	actmon@0,6000c800 {
+		compatible = "nvidia,tegra124-actmon";
+		reg = <0x0 0x6000c800 0x0 0x400>;
+		interrupts = <GIC_SPI 45 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&tegra_car TEGRA124_CLK_ACTMON>;
+		clock-names = "actmon";
+		resets = <&tegra_car 119>;
+		reset-names = "actmon";
+
+		status = "okay";
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
