@@ -51,6 +51,22 @@
 #define PMC_CPUPWRGOOD_TIMER	0xc8
 #define PMC_CPUPWROFF_TIMER	0xcc
 
+#define PMC_SENSOR_CTRL			0x1b0
+#define PMC_SENSOR_CTRL_SCRATCH_WRITE	(1 << 2)
+#define PMC_SENSOR_CTRL_ENABLE_RST	(1 << 1)
+
+#define PMC_SCRATCH54			0x258
+#define PMC_SCRATCH54_DATA_SHIFT	8
+#define PMC_SCRATCH54_ADDR_SHIFT	0
+
+#define PMC_SCRATCH55			0x25c
+#define PMC_SCRATCH55_RESET_TEGRA	(1 << 31)
+#define PMC_SCRATCH55_CNTRL_ID_SHIFT	27
+#define PMC_SCRATCH55_PINMUX_SHIFT	24
+#define PMC_SCRATCH55_16BITOP		(1 << 15)
+#define PMC_SCRATCH55_CHECKSUM_SHIFT	16
+#define PMC_SCRATCH55_I2CSLV1_SHIFT	0
+
 static u8 tegra_cpu_domains[] = {
 	0xFF,			/* not available for CPU0 */
 	TEGRA_POWERGATE_CPU1,
@@ -295,11 +311,19 @@ void tegra_pmc_suspend_init(void)
 }
 #endif
 
+#define PMC_HAS_THERMAL_RESET (1 << 0)
+
 static const struct of_device_id matches[] __initconst = {
-	{ .compatible = "nvidia,tegra124-pmc" },
-	{ .compatible = "nvidia,tegra114-pmc" },
-	{ .compatible = "nvidia,tegra30-pmc" },
-	{ .compatible = "nvidia,tegra20-pmc" },
+	{
+		.compatible = "nvidia,tegra124-pmc",
+		.data = (void *)PMC_HAS_THERMAL_RESET
+	},
+	{
+		.compatible = "nvidia,tegra114-pmc",
+		.data = (void *)PMC_HAS_THERMAL_RESET
+	},
+	{ .compatible = "nvidia,tegra30-pmc", .data = 0 },
+	{ .compatible = "nvidia,tegra20-pmc", .data = 0 },
 	{ }
 };
 
@@ -322,6 +346,67 @@ void __init tegra_pmc_init_irq(void)
 	else
 		val &= ~PMC_CTRL_INTR_LOW;
 	tegra_pmc_writel(val, PMC_CTRL);
+}
+
+void __init tegra_pmc_init_thermal_reset(struct device_node *np)
+{
+	u32 pmu_i2c_addr, i2c_ctrl_id, reg_addr, reg_data, pinmux;
+	bool pmu_16bit_ops;
+	u32 val, checksum;
+	const struct of_device_id *match = of_match_node(matches, np);
+
+	if (!((u32)match->data & PMC_HAS_THERMAL_RESET))
+		return;
+
+	pmu_16bit_ops =
+		of_property_read_bool(np, "nvidia,thermtrip-pmu-16bit-ops");
+	if (of_property_read_u32(
+		np, "nvidia,thermtrip-pmu-i2c-addr", &pmu_i2c_addr))
+		goto disabled;
+	if (of_property_read_u32(
+		np, "nvidia,thermtrip-i2c-controller", &i2c_ctrl_id))
+		goto disabled;
+	if (of_property_read_u32(
+		np, "nvidia,thermtrip-reg-addr", &reg_addr))
+		goto disabled;
+	if (of_property_read_u32(
+		np, "nvidia,thermtrip-reg-data", &reg_data))
+		goto disabled;
+	if (of_property_read_u32(
+		np, "nvidia,thermtrip-pinmux", &pinmux))
+		pinmux = 0;
+
+	val = tegra_pmc_readl(PMC_SENSOR_CTRL);
+	val |= PMC_SENSOR_CTRL_SCRATCH_WRITE | PMC_SENSOR_CTRL_ENABLE_RST;
+	tegra_pmc_writel(val, PMC_SENSOR_CTRL);
+
+	val = (reg_data << PMC_SCRATCH54_DATA_SHIFT) |
+	      (reg_addr << PMC_SCRATCH54_ADDR_SHIFT);
+	tegra_pmc_writel(val, PMC_SCRATCH54);
+
+	val = 0;
+	val |= PMC_SCRATCH55_RESET_TEGRA;
+	val |= i2c_ctrl_id << PMC_SCRATCH55_CNTRL_ID_SHIFT;
+	val |= pinmux << PMC_SCRATCH55_PINMUX_SHIFT;
+	if (pmu_16bit_ops)
+		val |= PMC_SCRATCH55_16BITOP;
+	val |= pmu_i2c_addr << PMC_SCRATCH55_I2CSLV1_SHIFT;
+
+	checksum = reg_addr + reg_data + (val & 0xFF) + ((val >> 8) & 0xFF) +
+		((val >> 24) & 0xFF);
+	checksum &= 0xFF;
+	checksum = 0x100 - checksum;
+
+	val |= checksum << PMC_SCRATCH55_CHECKSUM_SHIFT;
+
+	tegra_pmc_writel(val, PMC_SCRATCH55);
+
+	pr_info("Tegra: PMC thermal reset enabled\n");
+
+	return;
+
+disabled:
+	pr_warn("Tegra: PMC thermal reset disabled\n");
 }
 
 void __init tegra_pmc_init(void)
@@ -399,4 +484,6 @@ void __init tegra_pmc_init(void)
 	pmc_pm_data.lp0_vec_size = lp0_vec[1];
 
 	pmc_pm_data.suspend_mode = suspend_mode;
+
+	tegra_pmc_init_thermal_reset(np);
 }
