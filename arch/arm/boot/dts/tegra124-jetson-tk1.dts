@@ -1637,6 +1637,11 @@
 		nvidia,core-pwr-off-time = <61036>;
 		nvidia,core-power-req-active-high;
 		nvidia,sys-clock-req-active-high;
+
+		nvidia,thermtrip-pmu-i2c-addr = <0x40>;
+		nvidia,thermtrip-i2c-controller = <4>;
+		nvidia,thermtrip-reg-addr = <0x36>;
+		nvidia,thermtrip-reg-data = <0x2>;
 	};
 
 	padctl@0,7009f000 {
