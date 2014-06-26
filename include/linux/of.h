@@ -74,6 +74,18 @@ struct of_phandle_args {
 	uint32_t args[MAX_PHANDLE_ARGS];
 };
 
+/*
+ * keep the state at iterating a list of phandles with variable number
+ * of args
+ */
+struct of_phandle_iter {
+	const __be32 *cur; /* current phandle */
+	const __be32 *end; /* end of the last phandle */
+	const char *cells_name;
+	int cell_count;
+	struct of_phandle_args out_args;
+};
+
 /* initialize a node */
 extern struct kobj_type of_node_ktype;
 static inline void of_node_init(struct device_node *node)
@@ -302,6 +314,12 @@ extern int of_parse_phandle_with_fixed_args(const struct device_node *np,
 	struct of_phandle_args *out_args);
 extern int of_count_phandle_with_args(const struct device_node *np,
 	const char *list_name, const char *cells_name);
+
+extern void of_phandle_iter_start(struct of_phandle_iter *iter,
+				  const struct device_node *np,
+				  const char *list_name,
+				  const char *cells_name, int cell_count);
+extern void of_phandle_iter_next(struct of_phandle_iter *iter);
 
 extern void of_alias_scan(void * (*dt_alloc)(u64 size, u64 align));
 extern int of_alias_get_id(struct device_node *np, const char *stem);
@@ -555,6 +573,18 @@ static inline int of_count_phandle_with_args(struct device_node *np,
 	return -ENOSYS;
 }
 
+static inline void of_phandle_iter_start(struct of_phandle_iter *iter,
+					 const struct device_node *np,
+					 const char *list_name,
+					 const char *cells_name,
+					 int cell_count);
+{
+}
+
+static inline void of_phandle_iter_next(struct of_phandle_iter *iter)
+{
+}
+
 static inline int of_alias_get_id(struct device_node *np, const char *stem)
 {
 	return -ENOSYS;
@@ -742,6 +772,12 @@ static inline int of_property_read_u32(const struct device_node *np,
 #define for_each_node_with_property(dn, prop_name) \
 	for (dn = of_find_node_with_property(NULL, prop_name); dn; \
 	     dn = of_find_node_with_property(dn, prop_name))
+
+#define of_property_for_each_phandle_with_args(iter, np, list_name,	\
+					       cells_name, cell_count)	\
+	for (of_phandle_iter_start(&iter, np, list_name,		\
+				   cells_name, cell_count);		\
+	     iter.cur; of_phandle_iter_next(&iter))
 
 static inline int of_get_child_count(const struct device_node *np)
 {

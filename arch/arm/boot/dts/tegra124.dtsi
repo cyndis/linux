@@ -3,6 +3,7 @@
 #include <dt-bindings/pinctrl/pinctrl-tegra.h>
 #include <dt-bindings/pinctrl/pinctrl-tegra-xusb.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/memory/tegra124-mc.h>
 
 #include "skeleton.dtsi"
 
@@ -37,6 +38,8 @@
 			reset-names = "dc";
 
 			nvidia,head = <0>;
+
+			iommus = <&mc TEGRA_SWGROUP_DC>;
 		};
 
 		dc@0,54240000 {
@@ -50,6 +53,8 @@
 			reset-names = "dc";
 
 			nvidia,head = <1>;
+
+			iommus = <&mc TEGRA_SWGROUP_DCB>;
 		};
 
 		hdmi@0,54280000 {
@@ -480,6 +485,22 @@
 		reset-names = "fuse";
 	};
 
+	mc: memory-controller@0,70019000 {
+		compatible = "nvidia,tegra124-mc";
+		reg = <0x0 0x70019000 0x0 0x1000>;
+
+		interrupts = <GIC_SPI 77 IRQ_TYPE_LEVEL_HIGH>;
+
+		#iommu-cells = <1>;
+	};
+
+	emc@0,7001b000 {
+		compatible = "nvidia,tegra124-emc";
+		reg = <0x0 0x7001b000 0x0 0x1000>;
+
+		nvidia,memory-controller = <&mc>;
+	};
+
 	hda@0,70030000 {
 		compatible = "nvidia,tegra124-hda", "nvidia,tegra30-hda";
 		reg = <0x0 0x70030000 0x0 0x10000>;
@@ -512,6 +533,7 @@
 		resets = <&tegra_car 14>;
 		reset-names = "sdhci";
 		status = "disabled";
+		iommus = <&mc TEGRA_SWGROUP_SDMMC1A>;
 	};
 
 	sdhci@0,700b0200 {
@@ -522,6 +544,7 @@
 		resets = <&tegra_car 9>;
 		reset-names = "sdhci";
 		status = "disabled";
+		iommus = <&mc TEGRA_SWGROUP_SDMMC2A>;
 	};
 
 	sdhci@0,700b0400 {
@@ -532,6 +555,7 @@
 		resets = <&tegra_car 69>;
 		reset-names = "sdhci";
 		status = "disabled";
+		iommus = <&mc TEGRA_SWGROUP_SDMMC3A>;
 	};
 
 	sdhci@0,700b0600 {
@@ -542,6 +566,7 @@
 		resets = <&tegra_car 15>;
 		reset-names = "sdhci";
 		status = "disabled";
+		iommus = <&mc TEGRA_SWGROUP_SDMMC4A>;
 	};
 
 	ahub@0,70300000 {

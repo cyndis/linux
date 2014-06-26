@@ -37,6 +37,9 @@ struct tegra_fbdev {
 struct tegra_drm {
 	struct drm_device *drm;
 
+	struct iommu_domain *domain;
+	struct drm_mm mm;
+
 	struct mutex clients_lock;
 	struct list_head clients;
 

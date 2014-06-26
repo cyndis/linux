@@ -1,0 +1,12 @@
+NVIDIA Tegra124 Memory Controller device tree bindings
+======================================================
+
+Required properties:
+- compatible: Should be "nvidia,tegra124-mc"
+- reg: Physical base address and length of the controller's registers.
+- interrupts: The interrupt outputs from the controller.
+- #iommu-cells: Should be 1. The single cell of the IOMMU specifier defines
+  the SWGROUP of the master.
+
+This device implements an IOMMU that complies with the generic IOMMU binding.
+See ../iommu/iommu.txt for details.

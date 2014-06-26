@@ -30,7 +30,11 @@
 #include <linux/notifier.h>
 #include <linux/err.h>
 #include <linux/pci.h>
+#include <linux/of.h>
 #include <trace/events/iommu.h>
+
+static DEFINE_MUTEX(iommus_lock);
+static LIST_HEAD(iommus);
 
 static struct kset *iommu_group_kset;
 static struct ida iommu_group_ida;
@@ -1186,3 +1190,92 @@ int iommu_domain_set_attr(struct iommu_domain *domain,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(iommu_domain_set_attr);
+
+int iommu_add(struct iommu *iommu)
+{
+	mutex_lock(&iommus_lock);
+	list_add_tail(&iommu->list, &iommus);
+	mutex_unlock(&iommus_lock);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(iommu_add);
+
+void iommu_remove(struct iommu *iommu)
+{
+	mutex_lock(&iommus_lock);
+	list_del_init(&iommu->list);
+	mutex_unlock(&iommus_lock);
+}
+EXPORT_SYMBOL_GPL(iommu_remove);
+
+static int of_iommu_attach(struct device *dev)
+{
+	struct of_phandle_iter iter;
+	struct iommu *iommu;
+
+	mutex_lock(&iommus_lock);
+
+	of_property_for_each_phandle_with_args(iter, dev->of_node, "iommus",
+					       "#iommu-cells", 0) {
+		bool found = false;
+		int err;
+
+		/* skip disabled IOMMUs */
+		if (!of_device_is_available(iter.out_args.np))
+			continue;
+
+		list_for_each_entry(iommu, &iommus, list) {
+			if (iommu->dev->of_node == iter.out_args.np) {
+				err = iommu->ops->attach(iommu, dev);
+				if (err < 0) {
+				}
+
+				found = true;
+			}
+		}
+
+		if (!found) {
+			mutex_unlock(&iommus_lock);
+			return -EPROBE_DEFER;
+		}
+	}
+
+	mutex_unlock(&iommus_lock);
+
+	return 0;
+}
+
+static int of_iommu_detach(struct device *dev)
+{
+	/* TODO: implement */
+	return -ENOSYS;
+}
+
+int iommu_attach(struct device *dev)
+{
+	int err = 0;
+
+	if (IS_ENABLED(CONFIG_OF) && dev->of_node) {
+		err = of_iommu_attach(dev);
+		if (!err)
+			return 0;
+	}
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(iommu_attach);
+
+int iommu_detach(struct device *dev)
+{
+	int err = 0;
+
+	if (IS_ENABLED(CONFIG_OF) && dev->of_node) {
+		err = of_iommu_detach(dev);
+		if (!err)
+			return 0;
+	}
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(iommu_detach);

@@ -2,6 +2,7 @@ menuconfig ARCH_TEGRA
 	bool "NVIDIA Tegra" if ARCH_MULTI_V7
 	select ARCH_REQUIRE_GPIOLIB
 	select ARCH_SUPPORTS_TRUSTED_FOUNDATIONS
+	select ARM_DMA_USE_IOMMU
 	select ARM_GIC
 	select CLKSRC_MMIO
 	select HAVE_ARM_SCU if SMP
@@ -12,6 +13,7 @@ menuconfig ARCH_TEGRA
 	select SOC_BUS
 	select USB_ULPI if USB_PHY
 	select USB_ULPI_VIEWPORT if USB_PHY
+	select TEGRA124_MC
 	help
 	  This enables support for NVIDIA Tegra based systems.
 

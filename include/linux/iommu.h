@@ -43,6 +43,17 @@ struct notifier_block;
 typedef int (*iommu_fault_handler_t)(struct iommu_domain *,
 			struct device *, unsigned long, int, void *);
 
+struct iommu {
+	struct device *dev;
+
+	struct list_head list;
+
+	const struct iommu_ops *ops;
+};
+
+int iommu_add(struct iommu *iommu);
+void iommu_remove(struct iommu *iommu);
+
 struct iommu_domain_geometry {
 	dma_addr_t aperture_start; /* First address that can be mapped    */
 	dma_addr_t aperture_end;   /* Last address that can be mapped     */
@@ -130,6 +141,9 @@ struct iommu_ops {
 	/* Get the numer of window per domain */
 	u32 (*domain_get_windows)(struct iommu_domain *domain);
 
+	int (*attach)(struct iommu *iommu, struct device *dev);
+	int (*detach)(struct iommu *iommu, struct device *dev);
+
 	unsigned long pgsize_bitmap;
 };
 
@@ -199,6 +213,10 @@ extern int iommu_domain_window_enable(struct iommu_domain *domain, u32 wnd_nr,
 				      phys_addr_t offset, u64 size,
 				      int prot);
 extern void iommu_domain_window_disable(struct iommu_domain *domain, u32 wnd_nr);
+
+int iommu_attach(struct device *dev);
+int iommu_detach(struct device *dev);
+
 /**
  * report_iommu_fault() - report about an IOMMU fault to the IOMMU framework
  * @domain: the iommu domain where the fault has happened
@@ -424,6 +442,15 @@ static inline void iommu_device_unlink(struct device *dev, struct device *link)
 {
 }
 
+static inline int iommu_attach(struct device *dev)
+{
+	return 0;
+}
+
+static inline int iommu_detach(struct device *dev)
+{
+	return 0;
+}
 #endif /* CONFIG_IOMMU_API */
 
 #endif /* __LINUX_IOMMU_H */
