@@ -2,6 +2,7 @@ menuconfig ARCH_TEGRA
 	bool "NVIDIA Tegra" if ARCH_MULTI_V7
 	select ARCH_REQUIRE_GPIOLIB
 	select ARCH_SUPPORTS_TRUSTED_FOUNDATIONS
+	select ARM_DMA_USE_IOMMU
 	select ARM_GIC
 	select CLKSRC_MMIO
 	select HAVE_ARM_SCU if SMP
