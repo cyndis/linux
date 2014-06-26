@@ -3,6 +3,7 @@
 #include <dt-bindings/pinctrl/pinctrl-tegra.h>
 #include <dt-bindings/pinctrl/pinctrl-tegra-xusb.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/memory/tegra124-mc.h>
 
 #include "skeleton.dtsi"
 
@@ -37,6 +38,8 @@
 			reset-names = "dc";
 
 			nvidia,head = <0>;
+
+			iommus = <&mc TEGRA_SWGROUP_DC>;
 		};
 
 		dc@0,54240000 {
@@ -50,6 +53,8 @@
 			reset-names = "dc";
 
 			nvidia,head = <1>;
+
+			iommus = <&mc TEGRA_SWGROUP_DCB>;
 		};
 
 		hdmi@0,54280000 {
