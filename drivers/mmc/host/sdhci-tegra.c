@@ -15,6 +15,7 @@
 #include <linux/err.h>
 #include <linux/module.h>
 #include <linux/init.h>
+#include <linux/iommu.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
 #include <linux/io.h>
@@ -237,6 +238,11 @@ static int sdhci_tegra_probe(struct platform_device *pdev)
 	match = of_match_device(sdhci_tegra_dt_match, &pdev->dev);
 	if (!match)
 		return -EINVAL;
+
+	rc = iommu_attach(&pdev->dev);
+	if (rc < 0)
+		return rc;
+
 	soc_data = match->data;
 
 	host = sdhci_pltfm_init(pdev, soc_data->pdata, 0);
@@ -309,6 +315,8 @@ static int sdhci_tegra_remove(struct platform_device *pdev)
 
 	clk_disable_unprepare(pltfm_host->clk);
 	clk_put(pltfm_host->clk);
+
+	iommu_detach(&pdev->dev);
 
 	sdhci_pltfm_free(pdev);
 
