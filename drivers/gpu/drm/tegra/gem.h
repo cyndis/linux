@@ -26,6 +26,10 @@ struct tegra_bo {
 	struct sg_table *sgt;
 	dma_addr_t paddr;
 	void *vaddr;
+	struct drm_mm_node *mm;
+	unsigned long num_pages;
+	struct page **pages;
+
 };
 
 static inline struct tegra_bo *to_tegra_bo(struct drm_gem_object *gem)

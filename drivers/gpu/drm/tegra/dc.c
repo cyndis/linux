@@ -9,6 +9,7 @@
 
 #include <linux/clk.h>
 #include <linux/debugfs.h>
+#include <linux/iommu.h>
 #include <linux/reset.h>
 
 #include "dc.h"
@@ -1214,7 +1215,17 @@ static int tegra_dc_init(struct host1x_client *client)
 {
 	struct drm_device *drm = dev_get_drvdata(client->parent);
 	struct tegra_dc *dc = host1x_client_to_dc(client);
+	struct tegra_drm *tegra = drm->dev_private;
 	int err;
+
+	if (tegra->domain) {
+		err = iommu_attach_device(tegra->domain, dc->dev);
+		if (err < 0) {
+			dev_err(dc->dev, "failed to attach to IOMMU: %d\n",
+				err);
+			return err;
+		}
+	}
 
 	drm_crtc_init(drm, &dc->base, &tegra_crtc_funcs);
 	drm_mode_crtc_set_gamma_size(&dc->base, 256);
@@ -1249,7 +1260,9 @@ static int tegra_dc_init(struct host1x_client *client)
 
 static int tegra_dc_exit(struct host1x_client *client)
 {
+	struct drm_device *drm = dev_get_drvdata(client->parent);
 	struct tegra_dc *dc = host1x_client_to_dc(client);
+	struct tegra_drm *tegra = drm->dev_private;
 	int err;
 
 	devm_free_irq(dc->dev, dc->irq, dc);
@@ -1265,6 +1278,8 @@ static int tegra_dc_exit(struct host1x_client *client)
 		dev_err(dc->dev, "failed to shutdown RGB output: %d\n", err);
 		return err;
 	}
+
+	iommu_detach_device(tegra->domain, dc->dev);
 
 	return 0;
 }
@@ -1388,6 +1403,12 @@ static int tegra_dc_probe(struct platform_device *pdev)
 	if (dc->irq < 0) {
 		dev_err(&pdev->dev, "failed to get IRQ\n");
 		return -ENXIO;
+	}
+
+	err = iommu_attach(&pdev->dev);
+	if (err < 0) {
+		dev_err(&pdev->dev, "failed to attach to IOMMU: %d\n", err);
+		return err;
 	}
 
 	INIT_LIST_HEAD(&dc->client.list);
