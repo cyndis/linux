@@ -23,7 +23,7 @@
 				nvidia,emc-mode-2 = <0x80200008>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x00000000 /* EMC_RC */
 					0x00000003 /* EMC_RFC */
 					0x00000000 /* EMC_RFC_SLR */
@@ -217,7 +217,7 @@
 				nvidia,emc-mode-2 = <0x80200008>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x00000000
 					0x00000005
 					0x00000000
@@ -410,7 +410,7 @@
 				nvidia,emc-mode-2 = <0x80200008>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x00000001
 					0x0000000a
 					0x00000000
@@ -603,7 +603,7 @@
 				nvidia,emc-mode-2 = <0x80200008>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x00000003
 					0x00000011
 					0x00000000
@@ -796,7 +796,7 @@
 				nvidia,emc-mode-2 = <0x80200008>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x00000004
 					0x0000001a
 					0x00000000
@@ -989,7 +989,7 @@
 				nvidia,emc-mode-2 = <0x80200008>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x00000009
 					0x00000035
 					0x00000000
@@ -1182,7 +1182,7 @@
 				nvidia,emc-mode-2 = <0x80200000>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x0000000d
 					0x0000004d
 					0x00000000
@@ -1375,7 +1375,7 @@
 				nvidia,emc-mode-2 = <0x80200000>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x00000011
 					0x00000066
 					0x00000000
@@ -1568,7 +1568,7 @@
 				nvidia,emc-mode-2 = <0x80200008>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x00000018
 					0x00000088
 					0x00000000
@@ -1761,7 +1761,7 @@
 				nvidia,emc-mode-2 = <0x80200010>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x0000001b
 					0x0000009b
 					0x00000000
@@ -1954,7 +1954,7 @@
 				nvidia,emc-mode-2 = <0x80200018>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x00000024
 					0x000000cd
 					0x00000000
@@ -2147,7 +2147,7 @@
 				nvidia,emc-mode-2 = <0x80200020>;
 				nvidia,emc-mode-4 = <0x00000000>;
 
-				nvidia,emc-burst-data = <
+				nvidia,characterization = <
 					0x0000002b
 					0x000000f0
 					0x00000000
