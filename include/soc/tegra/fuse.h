@@ -60,6 +60,9 @@ int tegra_fuse_readl(unsigned long offset, u32 *value);
 
 extern struct tegra_sku_info tegra_sku_info;
 
+int tegra_mc_write_emem_configuration(unsigned long rate);
+int tegra_mc_get_emem_device_count(u8 *count);
+
 #endif /* __ASSEMBLY__ */
 
 #endif /* __SOC_TEGRA_FUSE_H__ */
