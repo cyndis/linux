@@ -34,9 +34,6 @@
 #define	EMC_FBIO_CFG5_DRAM_TYPE_MASK		0x3
 #define	EMC_FBIO_CFG5_DRAM_TYPE_SHIFT		0
 
-#define MC_EMEM_ADR_CFG				0x54
-#define MC_EMEM_ADR_CFG_EMEM_NUMDEV		BIT(0)
-
 #define EMC_INTSTATUS				0x0
 #define EMC_INTSTATUS_CLKCHANGE_COMPLETE	BIT(4)
 
@@ -275,28 +272,6 @@
 #define EMC_BGBIAS_CTL0_BIAS0_DSC_E_PWRD	BIT(1)
 #define EMC_PUTERM_ADJ				0x574
 
-#define MC_EMEM_ARB_CFG				0x90
-#define MC_EMEM_ARB_OUTSTANDING_REQ		0x94
-#define MC_EMEM_ARB_TIMING_RCD			0x98
-#define MC_EMEM_ARB_TIMING_RP			0x9c
-#define MC_EMEM_ARB_TIMING_RC			0xa0
-#define MC_EMEM_ARB_TIMING_RAS			0xa4
-#define MC_EMEM_ARB_TIMING_FAW			0xa8
-#define MC_EMEM_ARB_TIMING_RRD			0xac
-#define MC_EMEM_ARB_TIMING_RAP2PRE		0xb0
-#define MC_EMEM_ARB_TIMING_WAP2PRE		0xb4
-#define MC_EMEM_ARB_TIMING_R2R			0xb8
-#define MC_EMEM_ARB_TIMING_W2W			0xbc
-#define MC_EMEM_ARB_TIMING_R2W			0xc0
-#define MC_EMEM_ARB_TIMING_W2R			0xc4
-#define MC_EMEM_ARB_DA_TURNS			0xd0
-#define MC_EMEM_ARB_DA_COVERS			0xd4
-#define MC_EMEM_ARB_MISC0			0xd8
-#define MC_EMEM_ARB_MISC1			0xdc
-#define MC_EMEM_ARB_RING1_THROTTLE		0xe0
-
-#define MC_TIMING_CONTROL			0xfc
-
 #define DRAM_DEV_SEL_ALL			0
 #define DRAM_DEV_SEL_0				(2 << 30)
 #define DRAM_DEV_SEL_1				(1 << 30)
@@ -477,28 +452,6 @@ static int t124_emc_burst_regs[] = {
 	EMC_QPOP
 };
 
-static int t124_mc_burst_regs[] = {
-	MC_EMEM_ARB_CFG,
-	MC_EMEM_ARB_OUTSTANDING_REQ,
-	MC_EMEM_ARB_TIMING_RCD,
-	MC_EMEM_ARB_TIMING_RP,
-	MC_EMEM_ARB_TIMING_RC,
-	MC_EMEM_ARB_TIMING_RAS,
-	MC_EMEM_ARB_TIMING_FAW,
-	MC_EMEM_ARB_TIMING_RRD,
-	MC_EMEM_ARB_TIMING_RAP2PRE,
-	MC_EMEM_ARB_TIMING_WAP2PRE,
-	MC_EMEM_ARB_TIMING_R2R,
-	MC_EMEM_ARB_TIMING_W2W,
-	MC_EMEM_ARB_TIMING_R2W,
-	MC_EMEM_ARB_TIMING_W2R,
-	MC_EMEM_ARB_DA_TURNS,
-	MC_EMEM_ARB_DA_COVERS,
-	MC_EMEM_ARB_MISC0,
-	MC_EMEM_ARB_MISC1,
-	MC_EMEM_ARB_RING1_THROTTLE
-};
-
 const char *emc_parent_clk_names[] = {
 	"pll_m", "pll_c", "pll_p", "clk_m", "pll_m_ud",
 	"pll_c2", "pll_c3", "pll_c_ud"
@@ -540,7 +493,6 @@ struct emc_timing {
 			u32 emc_mrs_wait_cnt;
 		};
 	};
-	u32 mc_burst_data[ARRAY_SIZE(t124_mc_burst_regs)];
 
 	u32 emc_zcal_cnt_long;
 	u32 emc_auto_cal_interval;
@@ -565,7 +517,6 @@ struct tegra_emc {
 	struct clk_hw hw;
 
 	void __iomem *emc_regs;
-	void __iomem *mc_regs;
 	void __iomem *clk_regs;
 
 	enum emc_dram_type dram_type;
@@ -650,8 +601,6 @@ static void emc_change_timing(struct tegra_emc *tegra,
 	BUG_ON(timing->rate == tegra->last_timing.rate);
 	BUG_ON(ARRAY_SIZE(timing->emc_burst_data) !=
 	       ARRAY_SIZE(t124_emc_burst_regs));
-	BUG_ON(ARRAY_SIZE(timing->mc_burst_data) !=
-	       ARRAY_SIZE(t124_mc_burst_regs));
 
 	if ((tegra->last_timing.emc_mode_1 & 0x1) == (timing->emc_mode_1 & 1))
 		dll_change = DLL_CHANGE_NONE;
@@ -754,10 +703,7 @@ static void emc_change_timing(struct tegra_emc *tegra,
 		__raw_writel(timing->emc_burst_data[i],
 			     tegra->emc_regs + t124_emc_burst_regs[i]);
 
-	/* The MC burst registers are shadowed so they must be written here */
-	for (i = 0; i < ARRAY_SIZE(timing->mc_burst_data); ++i)
-		__raw_writel(timing->mc_burst_data[i],
-			     tegra->mc_regs + t124_mc_burst_regs[i]);
+	tegra_mc_write_emem_configuration(timing->rate);
 
 	val = timing->emc_cfg & ~EMC_CFG_POWER_FEATURES_MASK;
 	emc_ccfifo_writel(tegra, val, EMC_CFG);
@@ -888,7 +834,8 @@ static void emc_change_timing(struct tegra_emc *tegra,
 
 	/* Read MC register to wait until programming has settled */
 
-	readl(tegra->mc_regs + MC_EMEM_ADR_CFG);
+	//readl(tegra->mc_regs + MC_EMEM_ADR_CFG); likely unnecessary
+	//since we are not doing any writes to mc
 	readl(tegra->emc_regs + EMC_INTSTATUS);
 
 	/* Program new parent and divisor. This triggers the EMC state machine
@@ -1199,10 +1146,6 @@ static void emc_read_current_timing(struct tegra_emc *tegra,
 		timing->emc_burst_data[i] =
 			readl(tegra->emc_regs + t124_emc_burst_regs[i]);
 
-	for (i = 0; i < ARRAY_SIZE(t124_mc_burst_regs); ++i)
-		timing->mc_burst_data[i] =
-			readl(tegra->mc_regs + t124_mc_burst_regs[i]);
-
 	timing->rate = clk_get_rate(tegra->hw.clk);
 	timing->emc_cfg = readl(tegra->emc_regs + EMC_CFG);
 
@@ -1218,8 +1161,9 @@ static void emc_init(struct tegra_emc *tegra)
 {
 	tegra->dram_type = readl(tegra->emc_regs + EMC_FBIO_CFG5)
 		& EMC_FBIO_CFG5_DRAM_TYPE_MASK >> EMC_FBIO_CFG5_DRAM_TYPE_SHIFT;
-	tegra->dram_num = (readl(tegra->mc_regs + MC_EMEM_ADR_CFG)
-		& MC_EMEM_ADR_CFG_EMEM_NUMDEV) + 1;
+	tegra->dram_num = tegra_mc_get_device_count();
+	//tegra->dram_num = (readl(tegra->mc_regs + MC_EMEM_ADR_CFG)
+	//	& MC_EMEM_ADR_CFG_EMEM_NUMDEV) + 1;
 
 	emc_read_current_timing(tegra, &tegra->last_timing);
 
@@ -1253,22 +1197,12 @@ static int load_one_timing_from_dt(struct tegra_emc *tegra,
 
 	timing->parent_rate = tmp;
 
-	err = of_property_read_u32_array(node, "nvidia,emc-burst-data",
+	err = of_property_read_u32_array(node, "nvidia,characterization",
 					 timing->emc_burst_data,
 					 ARRAY_SIZE(timing->emc_burst_data));
 	if (err) {
 		dev_err(&tegra->pdev->dev,
 			"timing %s: failed to read emc burst data\n",
-			node->name);
-		return err;
-	}
-
-	err = of_property_read_u32_array(node, "nvidia,mc-burst-data",
-					 timing->mc_burst_data,
-					 ARRAY_SIZE(timing->mc_burst_data));
-	if (err) {
-		dev_err(&tegra->pdev->dev,
-			"timing %s: failed to read mc burst data\n",
 			node->name);
 		return err;
 	}
@@ -1392,11 +1326,6 @@ static const struct of_device_id tegra_car_of_match[] = {
 	{}
 };
 
-static const struct of_device_id tegra_mc_of_match[] = {
-	{ .compatible = "nvidia,tegra124-mc" },
-	{}
-};
-
 static int tegra_emc_probe(struct platform_device *pdev)
 {
 	struct tegra_emc *tegra;
@@ -1430,28 +1359,6 @@ static int tegra_emc_probe(struct platform_device *pdev)
 	if (!tegra->clk_regs) {
 		dev_err(&pdev->dev, "could not map CAR registers\n");
 		return -ENOMEM;
-	}
-
-	/* First try to get MC registers from the MC device tree node.
-	 * If that doesn't exist, try to get them from the second register
-	 * range in our node. */
-
-	node = of_find_matching_node(NULL, tegra_mc_of_match);
-	err = of_address_to_resource(node, 0, &node_res);
-	if (err) {
-		res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-		tegra->mc_regs = devm_ioremap_resource(&pdev->dev, res);
-		if (IS_ERR(tegra->mc_regs)) {
-			dev_err(&pdev->dev, "failed to get MC registers\n");
-			return PTR_ERR(tegra->mc_regs);
-		}
-	} else {
-		tegra->mc_regs = devm_ioremap(&pdev->dev, node_res.start,
-					resource_size(&node_res));
-		if (!tegra->mc_regs) {
-			dev_err(&pdev->dev, "could not map MC registers\n");
-			return -ENOMEM;
-		}
 	}
 
 	node = of_get_child_by_name(pdev->dev.of_node, "timings");
