@@ -29,6 +29,7 @@
 #include <linux/string.h>
 #include <linux/debugfs.h>
 #include <linux/clkdev.h>
+#include <linux/tegra-soc.h>
 
 #define EMC_FBIO_CFG5				0x104
 #define	EMC_FBIO_CFG5_DRAM_TYPE_MASK		0x3
@@ -520,7 +521,7 @@ struct tegra_emc {
 	void __iomem *clk_regs;
 
 	enum emc_dram_type dram_type;
-	int dram_num;
+	u8 dram_num;
 
 	struct emc_timing last_timing;
 	struct emc_timing *timings;
@@ -595,7 +596,7 @@ static void emc_change_timing(struct tegra_emc *tegra,
 	u32 val, val2;
 	bool update = false;
 	int pre_wait = 0;
-	int i;
+	int i, err;
 	enum emc_dll_change dll_change;
 
 	BUG_ON(timing->rate == tegra->last_timing.rate);
@@ -703,7 +704,11 @@ static void emc_change_timing(struct tegra_emc *tegra,
 		__raw_writel(timing->emc_burst_data[i],
 			     tegra->emc_regs + t124_emc_burst_regs[i]);
 
-	tegra_mc_write_emem_configuration(timing->rate);
+	err = tegra_mc_write_emem_configuration(timing->rate);
+	if (err)
+		dev_warn(&tegra->pdev->dev,
+			 "writing emem configuration failed: %d. \n"
+			 "expect reduced performance", err);
 
 	val = timing->emc_cfg & ~EMC_CFG_POWER_FEATURES_MASK;
 	emc_ccfifo_writel(tegra, val, EMC_CFG);
@@ -1157,11 +1162,15 @@ static void emc_read_current_timing(struct tegra_emc *tegra,
 	timing->emc_mode_reset = 0;
 }
 
-static void emc_init(struct tegra_emc *tegra)
+static int emc_init(struct tegra_emc *tegra)
 {
+	int err;
+
 	tegra->dram_type = readl(tegra->emc_regs + EMC_FBIO_CFG5)
 		& EMC_FBIO_CFG5_DRAM_TYPE_MASK >> EMC_FBIO_CFG5_DRAM_TYPE_SHIFT;
-	tegra->dram_num = tegra_mc_get_device_count();
+	err = tegra_mc_get_emem_device_count(&tegra->dram_num);
+	if (err)
+		return err;
 	//tegra->dram_num = (readl(tegra->mc_regs + MC_EMEM_ADR_CFG)
 	//	& MC_EMEM_ADR_CFG_EMEM_NUMDEV) + 1;
 
@@ -1170,6 +1179,8 @@ static void emc_init(struct tegra_emc *tegra)
 	tegra->prev_parent = clk_get_parent_by_index(
 		tegra->hw.clk, emc_get_parent(&tegra->hw));
 	tegra->changing_timing = false;
+
+	return 0;
 }
 
 static int load_one_timing_from_dt(struct tegra_emc *tegra,
@@ -1387,15 +1398,20 @@ static int tegra_emc_probe(struct platform_device *pdev)
 		return PTR_ERR(clk);
 	}
 
+	err = emc_init(tegra);
+	if (err) {
+		dev_err(&pdev->dev, "initialization failed: %d\n", err);
+		return err;
+	}
+
+	emc_debugfs_init(tegra);
+
 	/* Allow debugging tools to see the EMC clock */
 	clk_register_clkdev(clk, "emc", "tegra-clk-debug");
 
 	clk_prepare_enable(clk);
 
 	platform_set_drvdata(pdev, tegra);
-
-	emc_init(tegra);
-	emc_debugfs_init(tegra);
 
 	return 0;
 };
