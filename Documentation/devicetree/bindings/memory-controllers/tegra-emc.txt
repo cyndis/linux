@@ -2,17 +2,18 @@ Tegra124 SoC EMC controller
 
 Required properties :
 - compatible : "nvidia,tegra124-emc".
-- reg : Should contain 1 or 2 entries:
+- reg : Should contain 1 entry:
   - EMC register set
-  - MC register set : Required only if no node with
-    'compatible = "nvidia,tegra124-mc"' exists. The MC register set
-    is first read from the MC node. If it doesn't exist, it is read
-    from this property.
-- timings : Should contain 1 entry for each supported clock rate.
-  Entries should be named "timing@n" where n is a 0-based increasing
-  number. The timings must be listed in rate-ascending order.
 
-Required properties for timings :
+The node should contain a "timings@i" subnode for each supported RAM type
+  (see field RAM_CODE in register PMC_STRAPPING_OPT_A)
+Required properties for "timings@i" nodes :
+- nvidia,ram-code : Should contain the value of RAM_CODE this timing set
+  is used for.
+
+Each "timings@i" node should contain "timing@j" subnodes. One "timing@j"
+  node should exist for each supported EMC clock rate.
+Required properties for "timing@j" nodes :
 - clock-frequency : Should contain the memory clock rate.
 - nvidia,parent-clock-frequency : Should contain the rate of the EMC
   clock's parent clock.
@@ -36,7 +37,5 @@ Required properties for timings :
   - nvidia,emc-mode-1
   - nvidia,emc-mode-2
   - nvidia,emc-mode-4
-- nvidia,emc-burst-data : EMC timing characterization data written to
-                          EMC registers.
-- nvidia,mc-burst-data : EMC timing characterization data written to
-                         MC registers.
+- nvidia,emc-configuration : EMC timing characterization data written to
+                             EMC registers.
