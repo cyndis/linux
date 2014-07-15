@@ -30,6 +30,7 @@
 #include <linux/debugfs.h>
 #include <linux/clkdev.h>
 #include <linux/tegra-soc.h>
+#include <linux/of_platform.h>
 
 #define EMC_FBIO_CFG5				0x104
 #define	EMC_FBIO_CFG5_DRAM_TYPE_MASK		0x3
@@ -1171,8 +1172,6 @@ static int emc_init(struct tegra_emc *tegra)
 	err = tegra_mc_get_emem_device_count(&tegra->dram_num);
 	if (err)
 		return err;
-	//tegra->dram_num = (readl(tegra->mc_regs + MC_EMEM_ADR_CFG)
-	//	& MC_EMEM_ADR_CFG_EMEM_NUMDEV) + 1;
 
 	emc_read_current_timing(tegra, &tegra->last_timing);
 
@@ -1208,7 +1207,7 @@ static int load_one_timing_from_dt(struct tegra_emc *tegra,
 
 	timing->parent_rate = tmp;
 
-	err = of_property_read_u32_array(node, "nvidia,characterization",
+	err = of_property_read_u32_array(node, "nvidia,emc-configuration",
 					 timing->emc_burst_data,
 					 ARRAY_SIZE(timing->emc_burst_data));
 	if (err) {
@@ -1371,6 +1370,14 @@ static int tegra_emc_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "could not map CAR registers\n");
 		return -ENOMEM;
 	}
+
+	node = of_parse_phandle(pdev->dev.of_node,
+				"nvidia,memory-controller", 0);
+	if (!node) {
+		dev_err(&pdev->dev, "could not get memory controller\n");
+		return -ENOENT;
+	}
+	of_node_put(node);
 
 	node = of_get_child_by_name(pdev->dev.of_node, "timings");
 	if (node) {

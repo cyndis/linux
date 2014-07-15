@@ -35,6 +35,9 @@
 #define MC_ERR_STATUS 0x08
 #define MC_ERR_ADR 0x0c
 
+#define MC_EMEM_ADR_CFG 0x54
+#define MC_EMEM_ADR_CFG_EMEM_NUMDEV (1 << 0)
+
 struct latency_allowance {
 	unsigned int reg;
 	unsigned int shift;
@@ -1749,6 +1752,8 @@ static const struct tegra_smmu_soc tegra132_smmu_soc = {
 struct tegra_mc {
 	struct device *dev;
 	struct tegra_smmu *smmu;
+	struct tegra_emem_timing *emem_timings;
+	int num_emem_timings;
 	void __iomem *regs;
 	int irq;
 
@@ -1763,6 +1768,134 @@ static inline u32 mc_readl(struct tegra_mc *mc, unsigned long offset)
 static inline void mc_writel(struct tegra_mc *mc, u32 value, unsigned long offset)
 {
 	writel(value, mc->regs + offset);
+}
+
+static struct tegra_mc *global_mc = NULL;
+
+static int t124_mc_emem_configuration_regs[] = {
+	0x90,	/* MC_EMEM_ARB_CFG */
+	0x94,	/* MC_EMEM_ARB_OUTSTANDING_REQ */
+	0x98,	/* MC_EMEM_ARB_TIMING_RCD */
+	0x9c,	/* MC_EMEM_ARB_TIMING_RP */
+	0xa0,	/* MC_EMEM_ARB_TIMING_RC */
+	0xa4,	/* MC_EMEM_ARB_TIMING_RAS */
+	0xa8,	/* MC_EMEM_ARB_TIMING_FAW */
+	0xac,	/* MC_EMEM_ARB_TIMING_RRD */
+	0xb0,	/* MC_EMEM_ARB_TIMING_RAP2PRE */
+	0xb4,	/* MC_EMEM_ARB_TIMING_WAP2PRE */
+	0xb8,	/* MC_EMEM_ARB_TIMING_R2R */
+	0xbc,	/* MC_EMEM_ARB_TIMING_W2W */
+	0xc0,	/* MC_EMEM_ARB_TIMING_R2W */
+	0xc4,	/* MC_EMEM_ARB_TIMING_W2R */
+	0xd0,	/* MC_EMEM_ARB_DA_TURNS */
+	0xd4,	/* MC_EMEM_ARB_DA_COVERS */
+	0xd8,	/* MC_EMEM_ARB_MISC0 */
+	0xdc,	/* MC_EMEM_ARB_MISC1 */
+	0xe0	/* MC_EMEM_ARB_RING1_THROTTLE */
+};
+
+struct tegra_emem_timing {
+	unsigned long rate;
+
+	u32 configuration[ARRAY_SIZE(t124_mc_emem_configuration_regs)];
+};
+
+static int emem_load_timing(struct device *dev,
+			    struct tegra_emem_timing *timing,
+			    struct device_node *node)
+{
+	int err;
+	u32 tmp;
+
+	err = of_property_read_u32(node, "clock-frequency", &tmp);
+	if (err) {
+		dev_err(dev,
+			"timing %s: failed to read rate\n", node->name);
+		return err;
+	}
+
+	timing->rate = tmp;
+
+	err = of_property_read_u32_array(node, "nvidia,emem-configuration",
+					 timing->configuration,
+					 ARRAY_SIZE(timing->configuration));
+	if (err) {
+		dev_err(dev,
+			"timing %s: failed to read EMEM configuration\n",
+			node->name);
+		return err;
+	}
+
+	return 0;
+}
+
+static int tegra_emem_probe(struct device *dev, struct tegra_mc *mc)
+{
+	struct device_node *node, *child;
+	int err, i;
+
+	node = of_get_child_by_name(dev->of_node, "timings");
+	if (node) {
+		int child_count = of_get_child_count(node);
+
+		mc->emem_timings = devm_kzalloc(dev,
+			sizeof(struct tegra_emem_timing) * child_count,
+			GFP_KERNEL);
+		if (!mc->emem_timings)
+			return -ENOMEM;
+
+		mc->num_emem_timings = child_count;
+
+		i = 0;
+
+		for_each_child_of_node(node, child) {
+			struct tegra_emem_timing *timing = mc->emem_timings + (i++);
+
+			err = emem_load_timing(dev, timing, child);
+			if (err)
+				return err;
+		}
+	} else {
+		mc->num_emem_timings = 0;
+	}
+
+	return 0;
+}
+
+int tegra_mc_get_emem_device_count(u8 *count)
+{
+	if (!global_mc)
+		return -EPROBE_DEFER;
+
+	*count = (mc_readl(global_mc, MC_EMEM_ADR_CFG) &
+			MC_EMEM_ADR_CFG_EMEM_NUMDEV) + 1;
+
+	return 0;
+}
+
+int tegra_mc_write_emem_configuration(unsigned long rate)
+{
+	int i;
+	struct tegra_emem_timing *timing = NULL;
+
+	if (!global_mc)
+		return -EPROBE_DEFER;
+
+	for (i = 0; i < global_mc->num_emem_timings; ++i) {
+		if (global_mc->emem_timings[i].rate == rate) {
+			timing = global_mc->emem_timings + i;
+			break;
+		}
+	}
+
+	if (!timing)
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(timing->configuration); ++i)
+		mc_writel(global_mc, timing->configuration[i],
+			  t124_mc_emem_configuration_regs[i]);
+
+	return 0;
 }
 
 struct tegra_mc_soc {
@@ -1895,6 +2028,12 @@ static int tegra_mc_probe(struct platform_device *pdev)
 		return PTR_ERR(mc->smmu);
 	}
 
+	err = tegra_emem_probe(&pdev->dev, mc);
+	if (err) {
+		dev_err(&pdev->dev, "failed to probe EMEM: %d\n", err);
+		return err;
+	}
+
 	mc->irq = platform_get_irq(pdev, 0);
 	if (mc->irq < 0) {
 		dev_err(&pdev->dev, "interrupt not specified\n");
@@ -1914,6 +2053,8 @@ static int tegra_mc_probe(struct platform_device *pdev)
 		MC_INT_ARBITRATION_EMEM | MC_INT_SECURITY_VIOLATION |
 		MC_INT_DECERR_EMEM;
 	mc_writel(mc, value, MC_INTMASK);
+
+	global_mc = mc;
 
 	return 0;
 }

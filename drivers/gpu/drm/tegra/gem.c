@@ -203,7 +203,7 @@ static void tegra_bo_destroy(struct drm_device *drm, struct tegra_bo *bo)
 static int tegra_bo_get_pages(struct drm_device *drm, struct tegra_bo *bo,
 			      size_t size)
 {
-	bo->pages = drm_gem_get_pages(&bo->gem, GFP_KERNEL);
+	bo->pages = drm_gem_get_pages(&bo->gem);
 	if (!bo->pages)
 		return -ENOMEM;
 

@@ -60,8 +60,17 @@ int tegra_fuse_readl(unsigned long offset, u32 *value);
 
 extern struct tegra_sku_info tegra_sku_info;
 
+#ifdef CONFIG_TEGRA124_MC
 int tegra_mc_write_emem_configuration(unsigned long rate);
 int tegra_mc_get_emem_device_count(u8 *count);
+#else
+static inline int tegra_mc_write_emem_configuration(unsigned long rate) {
+	return -ENOSYS;
+}
+static inline int tegra_mc_get_emem_device_count(u8 *count) {
+	return -ENOSYS;
+}
+#endif
 
 #endif /* __ASSEMBLY__ */
 
