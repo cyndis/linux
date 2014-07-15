@@ -1834,6 +1834,8 @@ static int tegra_emem_probe(struct device *dev, struct tegra_mc *mc)
 	struct device_node *node, *child;
 	int err, i;
 
+	mc->num_emem_timings = 0;
+
 	node = of_get_child_by_name(dev->of_node, "timings");
 	if (node) {
 		int child_count = of_get_child_count(node);
@@ -1855,8 +1857,6 @@ static int tegra_emem_probe(struct device *dev, struct tegra_mc *mc)
 			if (err)
 				return err;
 		}
-	} else {
-		mc->num_emem_timings = 0;
 	}
 
 	return 0;
@@ -1894,6 +1894,10 @@ int tegra_mc_write_emem_configuration(unsigned long rate)
 	for (i = 0; i < ARRAY_SIZE(timing->configuration); ++i)
 		mc_writel(global_mc, timing->configuration[i],
 			  t124_mc_emem_configuration_regs[i]);
+
+	mc_readl(global_mc, MC_EMEM_ADR_CFG);
+
+	wmb();
 
 	return 0;
 }
@@ -2047,6 +2051,10 @@ static int tegra_mc_probe(struct platform_device *pdev)
 			err);
 		return err;
 	}
+
+	/* FIXME ARBITRATION_EMEM (and probably some other one, but with lesser
+	 * effect, cause bandwidth losses on low freqs due to high amount of
+	 * interrupts */
 
 	value = MC_INT_DECERR_MTS | MC_INT_SECERR_SEC | MC_INT_DECERR_VPR |
 		MC_INT_INVALID_APB_ASID_UPDATE | MC_INT_INVALID_SMMU_PAGE |
