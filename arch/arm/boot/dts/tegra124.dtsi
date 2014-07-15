@@ -142,12 +142,6 @@
 		#reset-cells = <1>;
 	};
 
-	emc@0,7001b000 {
-		compatible = "nvidia,tegra124-emc";
-		reg = <0x0 0x7001b000 0x0 0x1000>,
-		      <0x0 0x70019000 0x0 0x1000>;
-	};
-
 	gpio: gpio@0,6000d000 {
 		compatible = "nvidia,tegra124-gpio", "nvidia,tegra30-gpio";
 		reg = <0x0 0x6000d000 0x0 0x1000>;
@@ -498,6 +492,14 @@
 		interrupts = <GIC_SPI 77 IRQ_TYPE_LEVEL_HIGH>;
 
 		#iommu-cells = <1>;
+	};
+
+	emc@0,7001b000 {
+		compatible = "nvidia,tegra124-emc";
+		reg = <0x0 0x7001b000 0x0 0x1000>,
+		      <0x0 0x70019000 0x0 0x1000>;
+
+		nvidia,memory-controller = <&mc>;
 	};
 
 	hda@0,70030000 {
