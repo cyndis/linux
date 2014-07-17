@@ -1,6 +1,8 @@
 / {
 	emc@0,7001b000 {
-		timings {
+		timings@0 {
+			nvidia,ram-code = <0>;
+
 			timing@0 {
 				clock-frequency = <12750000>;
 				nvidia,parent-clock-frequency = <408000000>;
@@ -2060,7 +2062,9 @@
 	};
 
 	memory-controller@0,70019000 {
-		timings {
+		timings@0 {
+			nvidia,ram-code = <0>;
+
 			timing@0 {
 				clock-frequency = <12750000>;
 
