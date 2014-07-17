@@ -292,6 +292,9 @@
 
 #define EMC_STATUS_UPDATE_TIMEOUT		1000
 
+#define PMC_STRAPPING_OPT_A_RAM_CODE_MASK	(0xf << 4)
+#define PMC_STRAPPING_OPT_A_RAM_CODE_SHIFT	4
+
 enum emc_dram_type {
 	DRAM_TYPE_DDR3 = 0,
 	DRAM_TYPE_DDR1 = 1,
@@ -1348,6 +1351,7 @@ static int tegra_emc_probe(struct platform_device *pdev)
 	struct device_node *node;
 	struct resource node_res;
 	struct resource *res;
+	u32 ram_code, node_ram_code;
 	int err;
 
 	tegra = devm_kzalloc(&pdev->dev, sizeof(*tegra), GFP_KERNEL);
@@ -1383,13 +1387,30 @@ static int tegra_emc_probe(struct platform_device *pdev)
 	}
 	of_node_put(node);
 
-	node = of_get_child_by_name(pdev->dev.of_node, "timings");
-	if (node) {
+	ram_code = tegra_read_straps() & PMC_STRAPPING_OPT_A_RAM_CODE_MASK
+				      >> PMC_STRAPPING_OPT_A_RAM_CODE_SHIFT;
+
+	tegra->num_timings = 0;
+
+	for_each_child_of_node(pdev->dev.of_node, node) {
+		if (strcmp(node->name, "timings"))
+			continue;
+
+		err = of_property_read_u32(node, "nvidia,ram-code",
+						&node_ram_code);
+		if (err) {
+			dev_warn(&pdev->dev,
+				 "skipping timing without ram-code\n");
+			continue;
+		}
+
+		if (node_ram_code != ram_code)
+			continue;
+
 		err = load_timings_from_dt(tegra, node);
 		if (err)
 			return err;
-	} else {
-		tegra->num_timings = 0;
+		break;
 	}
 
 	if (tegra->num_timings == 0)
