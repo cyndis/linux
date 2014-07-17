@@ -14,6 +14,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/tegra-soc.h>
 
 #include <dt-bindings/memory/tegra124-mc.h>
 
@@ -37,6 +38,9 @@
 
 #define MC_EMEM_ADR_CFG 0x54
 #define MC_EMEM_ADR_CFG_EMEM_NUMDEV (1 << 0)
+
+#define PMC_STRAPPING_OPT_A_RAM_CODE_MASK (0xf << 4)
+#define PMC_STRAPPING_OPT_A_RAM_CODE_SHIFT 4
 
 struct latency_allowance {
 	unsigned int reg;
@@ -1832,13 +1836,29 @@ static int emem_load_timing(struct device *dev,
 static int tegra_emem_probe(struct device *dev, struct tegra_mc *mc)
 {
 	struct device_node *node, *child;
-	int err, i;
+	int err, i, child_count;
+	u32 ram_code, node_ram_code;
+
+	ram_code = tegra_read_straps() & PMC_STRAPPING_OPT_A_RAM_CODE_MASK
+				      >> PMC_STRAPPING_OPT_A_RAM_CODE_SHIFT;
 
 	mc->num_emem_timings = 0;
 
-	node = of_get_child_by_name(dev->of_node, "timings");
-	if (node) {
-		int child_count = of_get_child_count(node);
+	for_each_child_of_node(dev->of_node, node) {
+		if (strcmp(node->name, "timings"))
+			continue;
+
+		err = of_property_read_u32(node, "nvidia,ram-code",
+						&node_ram_code);
+		if (err) {
+			dev_warn(dev, "skipping timing without ram-code\n");
+			continue;
+		}
+
+		if (node_ram_code != ram_code)
+			continue;
+
+		child_count = of_get_child_count(node);
 
 		mc->emem_timings = devm_kzalloc(dev,
 			sizeof(struct tegra_emem_timing) * child_count,
@@ -1857,6 +1877,8 @@ static int tegra_emem_probe(struct device *dev, struct tegra_mc *mc)
 			if (err)
 				return err;
 		}
+
+		break;
 	}
 
 	return 0;
