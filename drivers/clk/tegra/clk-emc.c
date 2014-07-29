@@ -483,7 +483,8 @@ struct emc_timing {
 
 	/* Store EMC burst data in a union to minimize mistakes. This allows
 	 * us to use the same burst data lists as used by the downstream and
-	 * ChromeOS kernels. */
+	 * ChromeOS kernels.
+	 */
 	union {
 		u32 emc_burst_data[ARRAY_SIZE(t124_emc_burst_regs)];
 		struct {
@@ -840,7 +841,7 @@ static void emc_change_timing(struct tegra_emc *tegra,
 
 	/* Read MC register to wait until programming has settled */
 
-	//readl(tegra->mc_regs + MC_EMEM_ADR_CFG); likely unnecessary
+	//readl(tegra->mc_regs + MC_EMEM_ADR_CFG); likely unnecessary // FIXME
 	{
 	u8 tmp;
 	tegra_mc_get_emem_device_count(&tmp);
@@ -849,7 +850,8 @@ static void emc_change_timing(struct tegra_emc *tegra,
 	readl(tegra->emc_regs + EMC_INTSTATUS);
 
 	/* Program new parent and divisor. This triggers the EMC state machine
-	 * to change timings. */
+	 * to change timings.
+	 */
 
 	writel(car_value, tegra->clk_regs + CLK_SOURCE_EMC);
 	readl(tegra->clk_regs + CLK_SOURCE_EMC);
@@ -915,7 +917,8 @@ unsigned long emc_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
 	u32 div;
 
 	/* CCF wrongly assumes that the parent won't change during set_rate,
-	 * so get the parent rate explicitly. */
+	 * so get the parent rate explicitly.
+	 */
 	parent_rate = __clk_get_rate(__clk_get_parent(hw->clk));
 
 	val = readl(tegra->clk_regs + CLK_SOURCE_EMC);
@@ -926,7 +929,8 @@ unsigned long emc_recalc_rate(struct clk_hw *hw, unsigned long parent_rate)
 
 /* Rounds up unless no higher rate exists, in which case down. This way is
  * safer since things have EMC rate floors. Also don't touch parent_rate
- * since we don't want the CCF to play with our parent clocks. */
+ * since we don't want the CCF to play with our parent clocks.
+ */
 long emc_round_rate(struct clk_hw *hw, unsigned long rate,
 		    unsigned long *parent_rate)
 {
@@ -934,7 +938,8 @@ long emc_round_rate(struct clk_hw *hw, unsigned long rate,
 	int i;
 
 	/* Returning the original rate will lead to a more sensible error
-	 * message when emc_set_rate fails. */
+	 * message when emc_set_rate fails.
+	 */
 	if (tegra->num_timings == 0)
 		return rate;
 
@@ -1018,7 +1023,8 @@ static int emc_set_timing(struct tegra_emc *tegra, struct emc_timing *timing)
 /* Get backup timing to use as an intermediate step when a change between
  * two timings with the same clock source has been requested. First try to
  * find a timing with a higher clock rate to avoid a rate below any set rate
- * floors. If that is not possible, find a lower rate. */
+ * floors. If that is not possible, find a lower rate.
+ */
 static struct emc_timing *get_backup_timing(struct tegra_emc *tegra,
 					    int timing_index)
 {
@@ -1054,7 +1060,8 @@ int emc_set_rate(struct clk_hw *hw, unsigned long rate,
 
 	/* When emc_set_timing changes the parent rate, CCF will propagate
 	 * that downward to us, so ignore any set_rate calls while a rate
-	 * change is already going on. */
+	 * change is already going on.
+	 */
 	if (tegra->changing_timing)
 		return 0;
 
@@ -1075,7 +1082,8 @@ int emc_set_rate(struct clk_hw *hw, unsigned long rate,
 	    emc_parent_clk_sources[timing->parent_index] &&
 	    clk_get_rate(timing->parent) != timing->parent_rate) {
 		/* Parent clock source not changed but parent rate has changed,
-		 * need to temporarily switch to another parent */
+		 * need to temporarily switch to another parent
+		 */
 
 		struct emc_timing *backup_timing;
 
