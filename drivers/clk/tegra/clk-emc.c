@@ -558,7 +558,6 @@ static void emc_seq_update_timing(struct tegra_emc *tegra)
 	}
 
 	dev_err(&tegra->pdev->dev, "timing update failed\n");
-	BUG();
 }
 
 static void emc_seq_disable_auto_cal(struct tegra_emc *tegra)
@@ -574,7 +573,6 @@ static void emc_seq_disable_auto_cal(struct tegra_emc *tegra)
 	}
 
 	dev_err(&tegra->pdev->dev, "auto cal disable failed\n");
-	BUG();
 }
 
 static void emc_seq_wait_clkchange(struct tegra_emc *tegra)
@@ -588,7 +586,6 @@ static void emc_seq_wait_clkchange(struct tegra_emc *tegra)
 	}
 
 	dev_err(&tegra->pdev->dev, "clkchange failed\n");
-	BUG();
 }
 
 static void emc_change_timing(struct tegra_emc *tegra,
