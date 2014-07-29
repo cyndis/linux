@@ -29,8 +29,8 @@
 #include <linux/string.h>
 #include <linux/debugfs.h>
 #include <linux/clkdev.h>
-#include <linux/tegra-soc.h>
 #include <linux/of_platform.h>
+#include <soc/tegra/fuse.h>
 
 #define EMC_FBIO_CFG5				0x104
 #define	EMC_FBIO_CFG5_DRAM_TYPE_MASK		0x3
@@ -291,9 +291,6 @@
 #define EMC_DRAM_DEV_SEL(n) ((n > 1) ? DRAM_DEV_SEL_ALL : DRAM_DEV_SEL_0)
 
 #define EMC_STATUS_UPDATE_TIMEOUT		1000
-
-#define PMC_STRAPPING_OPT_A_RAM_CODE_MASK	(0xf << 4)
-#define PMC_STRAPPING_OPT_A_RAM_CODE_SHIFT	4
 
 enum emc_dram_type {
 	DRAM_TYPE_DDR3 = 0,
@@ -1387,8 +1384,7 @@ static int tegra_emc_probe(struct platform_device *pdev)
 	}
 	of_node_put(node);
 
-	ram_code = tegra_read_straps() & PMC_STRAPPING_OPT_A_RAM_CODE_MASK
-				      >> PMC_STRAPPING_OPT_A_RAM_CODE_SHIFT;
+	ram_code = tegra_read_ram_code();
 
 	tegra->num_timings = 0;
 
