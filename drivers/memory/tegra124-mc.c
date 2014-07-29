@@ -14,7 +14,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
-#include <linux/tegra-soc.h>
+#include <soc/tegra/fuse.h>
 
 #include <dt-bindings/memory/tegra124-mc.h>
 
@@ -1839,8 +1839,7 @@ static int tegra_emem_probe(struct device *dev, struct tegra_mc *mc)
 	int err, i, child_count;
 	u32 ram_code, node_ram_code;
 
-	ram_code = tegra_read_straps() & PMC_STRAPPING_OPT_A_RAM_CODE_MASK
-				      >> PMC_STRAPPING_OPT_A_RAM_CODE_SHIFT;
+	ram_code = tegra_read_ram_code();
 
 	mc->num_emem_timings = 0;
 
