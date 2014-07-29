@@ -30,6 +30,7 @@
 #include <linux/debugfs.h>
 #include <linux/clkdev.h>
 #include <linux/of_platform.h>
+#include <linux/sort.h>
 #include <soc/tegra/fuse.h>
 
 #define EMC_FBIO_CFG5				0x104
@@ -1280,12 +1281,23 @@ static int load_one_timing_from_dt(struct tegra_emc *tegra,
 	return 0;
 }
 
+static int cmp_timings(const void *_a, const void *_b) {
+	const struct emc_timing *a = _a;
+	const struct emc_timing *b = _b;
+
+	if (a->rate < b->rate)
+		return -1;
+	else if (a->rate == b->rate)
+		return 0;
+	else
+		return 1;
+}
+
 static int load_timings_from_dt(struct tegra_emc *tegra,
 				struct device_node *node)
 {
 	struct device_node *child;
 	int child_count = of_get_child_count(node);
-	unsigned long prev_rate = 0;
 	int i = 0, err;
 
 	tegra->timings = devm_kzalloc(&tegra->pdev->dev,
@@ -1302,17 +1314,10 @@ static int load_timings_from_dt(struct tegra_emc *tegra,
 		err = load_one_timing_from_dt(tegra, timing, child);
 		if (err)
 			return err;
-
-		if (timing->rate <= prev_rate) {
-			dev_err(&tegra->pdev->dev,
-				"timing %s: rate not increasing\n",
-				child->name);
-			clk_put(timing->parent);
-			return -EINVAL;
-		}
-
-		prev_rate = timing->rate;
 	}
+
+	sort(tegra->timings, tegra->num_timings, sizeof(struct emc_timing),
+	     cmp_timings, NULL);
 
 	return 0;
 }
