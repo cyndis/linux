@@ -29,33 +29,34 @@
 #include <linux/platform_device.h>
 #include <linux/reset.h>
 
-#define ACTMON_GLB_STATUS			0x0
-#define ACTMON_GLB_PERIOD_CTRL			0x4
+#define ACTMON_GLB_STATUS					0x0
+#define ACTMON_GLB_PERIOD_CTRL					0x4
 
-#define ACTMON_DEV_CTRL				0x0
-#define		ACTMON_DEV_CTRL_K_VAL_SHIFT	10
-#define		ACTMON_DEV_CTRL_ENB_PERIODIC	(1<<18)
-#define		ACTMON_DEV_CTRL_AT_END_EN	(1<<19)
-#define		ACTMON_DEV_CTRL_AVG_BELOW_WMARK_EN (1<<20)
-#define		ACTMON_DEV_CTRL_AVG_ABOVE_WMARK_EN (1<<21)
-#define		ACTMON_DEV_CTRL_CONSECUTIVE_BELOW_WMARK_NUM_SHIFT 23
-#define		ACTMON_DEV_CTRL_CONSECUTIVE_ABOVE_WMARK_NUM_SHIFT 26
-#define		ACTMON_DEV_CTRL_CONSECUTIVE_BELOW_WMARK_EN (1<<29)
-#define		ACTMON_DEV_CTRL_CONSECUTIVE_ABOVE_WMARK_EN (1<<30)
-#define		ACTMON_DEV_CTRL_ENB		(1<<31)
-#define ACTMON_DEV_UPPER_WMARK			0x4
-#define ACTMON_DEV_LOWER_WMARK			0x8
-#define ACTMON_DEV_INIT_AVG			0xc
-#define ACTMON_DEV_AVG_UPPER_WMARK		0x10
-#define ACTMON_DEV_AVG_LOWER_WMARK		0x14
-#define ACTMON_DEV_COUNT_WEIGHT			0x18
-#define ACTMON_DEV_AVG_COUNT			0x20
-#define ACTMON_DEV_INTR_STATUS			0x24
+#define ACTMON_DEV_CTRL						0x0
+#define ACTMON_DEV_CTRL_K_VAL_SHIFT				10
+#define ACTMON_DEV_CTRL_ENB_PERIODIC				BIT(18)
+#define ACTMON_DEV_CTRL_AT_END_EN				BIT(19)
+#define ACTMON_DEV_CTRL_AVG_BELOW_WMARK_EN			BIT(20)
+#define ACTMON_DEV_CTRL_AVG_ABOVE_WMARK_EN			BIT(21)
+#define ACTMON_DEV_CTRL_CONSECUTIVE_BELOW_WMARK_NUM_SHIFT	23
+#define ACTMON_DEV_CTRL_CONSECUTIVE_ABOVE_WMARK_NUM_SHIFT	26
+#define ACTMON_DEV_CTRL_CONSECUTIVE_BELOW_WMARK_EN		BIT(29)
+#define ACTMON_DEV_CTRL_CONSECUTIVE_ABOVE_WMARK_EN		BIT(30)
+#define ACTMON_DEV_CTRL_ENB					BIT(31)
 
-#define ACTMON_SAMPLING_PERIOD			12 // ms
-#define ACTMON_AVERAGE_WINDOW_LOG2		6
-#define ACTMON_AVERAGE_BAND			6
-#define TEST_MAX_FREQ				1000000
+#define ACTMON_DEV_UPPER_WMARK					0x4
+#define ACTMON_DEV_LOWER_WMARK					0x8
+#define ACTMON_DEV_INIT_AVG					0xc
+#define ACTMON_DEV_AVG_UPPER_WMARK				0x10
+#define ACTMON_DEV_AVG_LOWER_WMARK				0x14
+#define ACTMON_DEV_COUNT_WEIGHT					0x18
+#define ACTMON_DEV_AVG_COUNT					0x20
+#define ACTMON_DEV_INTR_STATUS					0x24
+
+#define ACTMON_SAMPLING_PERIOD					12 // ms
+#define ACTMON_AVERAGE_WINDOW_LOG2				6
+#define ACTMON_AVERAGE_BAND					6
+#define TEST_MAX_FREQ						1000000
 
 struct tegra_actmon_device_data {
 	u32 offset;
@@ -83,7 +84,8 @@ static struct tegra_actmon_device_data actmon_device_data_t124[] = {
 		.boost_down_threshold = 40,
 		.above_watermark_window = 1,
 		.below_watermark_window = 3,
-		.count_weight = 0x400, /* this should probably be more than 1 for MC.. */
+		.count_weight = 0x400,
+		.clock_name = "emc"
 	},
 };
 
@@ -91,6 +93,8 @@ struct tegra_actmon_device {
 	void __iomem *regs;
 	const struct tegra_actmon_device_data *data;
 	u32 avg_band_freq;
+	u32 avg_count;
+	struct clk *clk;
 };
 
 struct tegra_actmon {
@@ -151,20 +155,6 @@ void tegra_actmon_init_device(struct tegra_actmon_device *device) {
 	       ACTMON_DEV_CTRL_CONSECUTIVE_ABOVE_WMARK_EN;
 	*/
 
-/*
-	val = 0;
-	val |= ACTMON_DEV_CTRL_ENB_PERIODIC | ACTMON_DEV_CTRL_AT_END_EN;
-	val |= ACTMON_DEV_CTRL_CONSECUTIVE_ABOVE_WMARK_EN;
-	val |= ACTMON_DEV_CTRL_CONSECUTIVE_BELOW_WMARK_EN;
-	val |= ACTMON_DEV_CTRL_AVG_ABOVE_WMARK_EN;
-	val |= ACTMON_DEV_CTRL_AVG_BELOW_WMARK_EN;
-	val |= (ACTMON_AVERAGE_WINDOW_LOG2 - 1)
-		<< ACTMON_DEV_CTRL_K_VAL_SHIFT;
-	val |= (device->data->below_watermark_window - 1)
-		<< ACTMON_DEV_CTRL_CONSECUTIVE_BELOW_WMARK_NUM_SHIFT;
-	val |= (device->data->above_watermark_window - 1)
-		<< ACTMON_DEV_CTRL_CONSECUTIVE_ABOVE_WMARK_NUM_SHIFT;
-*/
 	writel(val, device->regs + ACTMON_DEV_CTRL);
 }
 
@@ -198,13 +188,28 @@ irqreturn_t actmon_isr(int irq, void *data) {
 	writel(0xffffffff, device->regs + ACTMON_DEV_INTR_STATUS);
 
 	u32 avg_count = readl(device->regs + ACTMON_DEV_AVG_COUNT);
-	if (avg_count > 0)
-		printk("actmon avg_count %d\n", avg_count);
+	device->avg_count = avg_count;
 
-	return IRQ_HANDLED;
+	return IRQ_WAKE_THREAD;
+}
+
+void bump_freq(struct tegra_actmon_device *dev) {
+	unsigned long rate = clk_get_rate(dev->clk);
 }
 
 irqreturn_t actmon_thread_isr(int irq, void *data) {
+	struct tegra_actmon *tegra = data;
+	struct tegra_actmon_device *device = NULL;
+
+	for (i = 0; i < ARRAY_SIZE(tegra->devices); ++i) {
+		device = tegra->devices + i;
+
+		if (device->avg_count >
+		    device->avg_band_freq * ACTMON_SAMPLING_PERIOD) {
+			bump_freq(device);
+		}
+	}
+
 	return IRQ_HANDLED;
 }
 
@@ -266,14 +271,13 @@ static int tegra_actmon_probe(struct platform_device *pdev)
 		struct tegra_actmon_device *device = tegra->devices + i;
 		device->data = data;
 		device->regs = tegra->regs + data->offset;
-		/*
+
 		device->clk = devm_clk_get(&pdev->dev, data->clock_name);
 		if (IS_ERR(device->clk)) {
 			dev_err(&pdev->dev, "Failed to get %s clock\n",
 				data->clock_name);
 			return PTR_ERR(device->clk);
 		}
-		*/
 
 		tegra_actmon_init_device(device);
 
