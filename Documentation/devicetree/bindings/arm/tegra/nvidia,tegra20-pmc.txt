@@ -38,6 +38,19 @@ Required properties when nvidia,suspend-mode is specified:
 			      Core power good time in uS.
 - nvidia,core-pwr-off-time : Core power off time in uS.
 
+Required properties for hardware-triggered thermal reset:
+    (only tegra30, tegra114, tegra124)
+- nvidia,thermtrip-pmu-i2c-addr : I2C address of the power management unit.
+- nvidia,thermtrip-i2c-controller : Index of the I2C controller the PMU is
+                                    attached to.
+- nvidia,thermtrip-reg-addr : Address (byte) to send reset command to.
+- nvidia,thermtrip-reg-data : Data (byte) to use as reset command.
+
+Optional properties for hardware-triggered thermal reset:
+    (only tegra30, tegra114, tegra124)
+- nvidia,thermtrip-pinmux : Pinmux ID used for I2C access.
+- nvidia,thermtrip-pmu-16bit-ops : Use 16-bit operations.
+
 Required properties when nvidia,suspend-mode=<0>:
 - nvidia,lp0-vec : <start length> Starting address and length of LP0 vector
   The LP0 vector contains the warm boot code that is executed by AVP when
