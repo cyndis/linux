@@ -247,3 +247,10 @@ config ARM_TEGRA20_CPUFREQ
 	default y
 	help
 	  This adds the CPUFreq driver support for Tegra20 SOCs.
+
+config ARM_TEGRA124_CPUFREQ
+	bool "Tegra124 CPUFreq support"
+	depends on ARCH_TEGRA && GENERIC_CPUFREQ_CPU0
+	default y
+	help
+	  This adds the CPUFreq driver support for Tegra124 SOCs.
