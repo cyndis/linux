@@ -17,20 +17,23 @@
  *
  */
 
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/platform_device.h>
-#include <linux/io.h>
-#include <linux/delay.h>
-#include <linux/err.h>
 #include <linux/clk-provider.h>
 #include <linux/clk.h>
-#include <linux/of_address.h>
-#include <linux/string.h>
-#include <linux/debugfs.h>
 #include <linux/clkdev.h>
-#include <linux/sort.h>
+#include <linux/debugfs.h>
+#include <linux/delay.h>
+
+#include <linux/err.h>
+#include <linux/io.h>
+#include <linux/kernel.h>
+
+#include <linux/module.h>
+#include <linux/of_address.h>
 #include <linux/of_platform.h>
+#include <linux/platform_device.h>
+#include <linux/sort.h>
+#include <linux/string.h>
+
 #include <soc/tegra/fuse.h>
 
 #define EMC_FBIO_CFG5				0x104
