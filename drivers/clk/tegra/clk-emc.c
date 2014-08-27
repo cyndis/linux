@@ -840,6 +840,10 @@ static void emc_change_timing(struct tegra_emc *tegra,
 	/* Read MC register to wait until programming has settled */
 
 	//readl(tegra->mc_regs + MC_EMEM_ADR_CFG); likely unnecessary // FIXME
+	{
+	u8 tmp;
+	tegra_mc_get_emem_device_count(&tmp);
+	}
 	//since we are not doing any writes to mc
 	readl(tegra->emc_regs + EMC_INTSTATUS);
 
