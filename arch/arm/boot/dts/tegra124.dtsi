@@ -550,7 +550,7 @@
 		compatible = "nvidia,tegra124-emc";
 		reg = <0x0 0x7001b000 0x0 0x1000>;
 
-		nvidia,memory-controller = <&mc>;
+		/* nvidia,memory-controller = <&mc>; */
 	};
 
 	hda@0,70030000 {
