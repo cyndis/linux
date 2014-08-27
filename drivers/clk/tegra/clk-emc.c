@@ -30,6 +30,7 @@
 #include <linux/debugfs.h>
 #include <linux/clkdev.h>
 #include <linux/sort.h>
+#include <linux/of_platform.h>
 #include <soc/tegra/fuse.h>
 
 #define EMC_FBIO_CFG5				0x104
@@ -1177,8 +1178,6 @@ static int emc_init(struct tegra_emc *tegra)
 	err = tegra_mc_get_emem_device_count(&tegra->dram_num);
 	if (err)
 		return err;
-	//tegra->dram_num = (readl(tegra->mc_regs + MC_EMEM_ADR_CFG)
-	//	& MC_EMEM_ADR_CFG_EMEM_NUMDEV) + 1;
 
 	emc_read_current_timing(tegra, &tegra->last_timing);
 
@@ -1382,6 +1381,14 @@ static int tegra_emc_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "could not map CAR registers\n");
 		return -ENOMEM;
 	}
+
+	node = of_parse_phandle(pdev->dev.of_node,
+				"nvidia,memory-controller", 0);
+	if (!node) {
+		dev_err(&pdev->dev, "could not get memory controller\n");
+		return -ENOENT;
+	}
+	of_node_put(node);
 
 	ram_code = tegra_read_ram_code();
 
