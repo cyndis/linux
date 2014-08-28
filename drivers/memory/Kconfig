@@ -41,6 +41,16 @@ config MVEBU_DEVBUS
 	  Armada 370 and Armada XP. This controller allows to handle flash
 	  devices such as NOR, NAND, SRAM, and FPGA.
 
+config TEGRA124_EMC
+	bool "Tegra124 External Memory Controller driver"
+	default y
+	depends on ARCH_TEGRA_12x_SOC
+	help
+	  This driver is for the External Memory Controller (EMC) found on
+	  Tegra124 chips. The EMC controls the external DRAM on the board.
+	  This driver is required to change memory timings / clock rate for
+	  external memory.
+
 config TEGRA20_MC
 	bool "Tegra20 Memory Controller(MC) driver"
 	default y
