@@ -666,8 +666,8 @@ static void emc_prepare_timing_change(struct tegra_emc *tegra,
 	err = tegra124_mc_write_emem_configuration(timing->rate);
 	if (err)
 		dev_warn(&tegra->pdev->dev,
-			 "writing emem configuration failed: %d. \n"
-			 "expect reduced performance", err);
+			 "writing emem configuration failed: %d. Expect reduced performance.",
+			 err);
 
 	val = timing->emc_cfg & ~EMC_CFG_POWER_FEATURES_MASK;
 	emc_ccfifo_writel(tegra, val, EMC_CFG);
