@@ -1380,6 +1380,8 @@ static void __init tegra124_clock_apply_init_table(void)
 	tegra_init_from_table(init_table, clks, TEGRA124_CLK_CLK_MAX);
 }
 
+int tegra_emc_init(struct device_node *np, void __iomem *clk_regs);
+
 static void __init tegra124_clock_init(struct device_node *np)
 {
 	struct device_node *node;
@@ -1421,6 +1423,7 @@ static void __init tegra124_clock_init(struct device_node *np)
 	tegra_super_clk_gen4_init(clk_base, pmc_base, tegra124_clks,
 					&pll_x_params);
 	tegra_add_of_provider(np);
+	tegra_emc_init(np, clk_base);
 	tegra_register_devclks(devclks, ARRAY_SIZE(devclks));
 
 	tegra_clk_apply_init_table = tegra124_clock_apply_init_table;
