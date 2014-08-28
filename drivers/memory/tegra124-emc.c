@@ -1106,7 +1106,6 @@ static int tegra_emc_probe(struct platform_device *pdev)
 	of_node_put(node);
 */
 	ram_code = tegra_read_ram_code();
-	pr_warn("emc memd: ram code is %d\n", ram_code);
 
 	tegra->num_timings = 0;
 
