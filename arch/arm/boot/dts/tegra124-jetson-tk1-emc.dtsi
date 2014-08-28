@@ -1,6 +1,6 @@
 / {
-	emc@0,7001b000 {
-		timings@0 {
+	clock@0,60006000 {
+		emc-timings@0 {
 			nvidia,ram-code = <3>;
 
 			timing@0 {
@@ -8,6 +8,82 @@
 				nvidia,parent-clock-frequency = <408000000>;
 				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
 				clock-names = "emc-parent";
+			};
+			timing@1 {
+				clock-frequency = <20400000>;
+				nvidia,parent-clock-frequency = <408000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
+				clock-names = "emc-parent";
+			};
+			timing@2 {
+				clock-frequency = <40800000>;
+				nvidia,parent-clock-frequency = <408000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
+				clock-names = "emc-parent";
+			};
+			timing@3 {
+				clock-frequency = <68000000>;
+				nvidia,parent-clock-frequency = <408000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
+				clock-names = "emc-parent";
+			};
+			timing@4 {
+				clock-frequency = <102000000>;
+				nvidia,parent-clock-frequency = <408000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
+				clock-names = "emc-parent";
+			};
+			timing@5 {
+				clock-frequency = <204000000>;
+				nvidia,parent-clock-frequency = <408000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
+				clock-names = "emc-parent";
+			};
+			timing@6 {
+				clock-frequency = <300000000>;
+				nvidia,parent-clock-frequency = <600000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_C>;
+				clock-names = "emc-parent";
+			};
+			timing@7 {
+				clock-frequency = <396000000>;
+				nvidia,parent-clock-frequency = <792000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_M>;
+				clock-names = "emc-parent";
+			};
+			timing@8 {
+				clock-frequency = <528000000>;
+				nvidia,parent-clock-frequency = <528000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_M_UD>;
+				clock-names = "emc-parent";
+			};
+			timing@9 {
+				clock-frequency = <600000000>;
+				nvidia,parent-clock-frequency = <600000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_C_UD>;
+				clock-names = "emc-parent";
+			};
+			timing@10 {
+				clock-frequency = <792000000>;
+				nvidia,parent-clock-frequency = <792000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_M_UD>;
+				clock-names = "emc-parent";
+			};
+			timing@11 {
+				clock-frequency = <924000000>;
+				nvidia,parent-clock-frequency = <924000000>;
+				clocks = <&tegra_car TEGRA124_CLK_PLL_M_UD>;
+				clock-names = "emc-parent";
+			};
+		};
+	};
+
+	emc@0,7001b000 {
+		timings@0 {
+			nvidia,ram-code = <3>;
+
+			timing@0 {
+				clock-frequency = <12750000>;
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -177,9 +253,6 @@
 
 			timing@1 {
 				clock-frequency = <20400000>;
-				nvidia,parent-clock-frequency = <408000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -345,14 +418,9 @@
 					0x8000023a
 					0x0000000a
 				>;
-
-
 			};
 			timing@2 {
 				clock-frequency = <40800000>;
-				nvidia,parent-clock-frequency = <408000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -521,9 +589,6 @@
 			};
 			timing@3 {
 				clock-frequency = <68000000>;
-				nvidia,parent-clock-frequency = <408000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -692,9 +757,6 @@
 			};
 			timing@4 {
 				clock-frequency = <102000000>;
-				nvidia,parent-clock-frequency = <408000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -863,9 +925,6 @@
 			};
 			timing@5 {
 				clock-frequency = <204000000>;
-				nvidia,parent-clock-frequency = <408000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_P>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -1034,9 +1093,6 @@
 			};
 			timing@6 {
 				clock-frequency = <300000000>;
-				nvidia,parent-clock-frequency = <600000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_C>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -1205,9 +1261,6 @@
 			};
 			timing@7 {
 				clock-frequency = <396000000>;
-				nvidia,parent-clock-frequency = <792000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_M>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -1376,9 +1429,6 @@
 			};
 			timing@8 {
 				clock-frequency = <528000000>;
-				nvidia,parent-clock-frequency = <528000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_M_UD>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -1547,9 +1597,6 @@
 			};
 			timing@9 {
 				clock-frequency = <600000000>;
-				nvidia,parent-clock-frequency = <600000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_C_UD>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -1718,9 +1765,6 @@
 			};
 			timing@10 {
 				clock-frequency = <792000000>;
-				nvidia,parent-clock-frequency = <792000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_M_UD>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x00000042>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
@@ -1889,9 +1933,6 @@
 			};
 			timing@11 {
 				clock-frequency = <924000000>;
-				nvidia,parent-clock-frequency = <924000000>;
-				clocks = <&tegra_car TEGRA124_CLK_PLL_M_UD>;
-				clock-names = "emc-parent";
 
 				nvidia,emc-zcal-cnt-long = <0x0000004c>;
 				nvidia,emc-auto-cal-interval = <0x001fffff>;
