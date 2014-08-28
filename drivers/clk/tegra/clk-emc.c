@@ -698,7 +698,7 @@ static void emc_change_timing(struct tegra_emc *tegra,
 		__raw_writel(timing->emc_burst_data[i],
 			     tegra->emc_regs + t124_emc_burst_regs[i]);
 
-	err = tegra_mc_write_emem_configuration(timing->rate);
+	err = tegra124_mc_write_emem_configuration(timing->rate);
 	if (err)
 		dev_warn(&tegra->pdev->dev,
 			 "writing emem configuration failed: %d. \n"
@@ -1161,7 +1161,7 @@ static int emc_init(struct tegra_emc *tegra)
 
 	tegra->dram_type = readl(tegra->emc_regs + EMC_FBIO_CFG5)
 		& EMC_FBIO_CFG5_DRAM_TYPE_MASK >> EMC_FBIO_CFG5_DRAM_TYPE_SHIFT;
-	err = tegra_mc_get_emem_device_count(&tegra->dram_num);
+	err = tegra124_mc_get_emem_device_count(&tegra->dram_num);
 	if (err)
 		return err;
 
