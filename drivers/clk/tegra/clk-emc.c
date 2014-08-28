@@ -29,6 +29,7 @@
 #include <linux/sort.h>
 #include <linux/string.h>
 
+#include <soc/tegra/car.h>
 #include <soc/tegra/fuse.h>
 #include <soc/tegra/mc.h>
 
@@ -277,12 +278,6 @@
 #define DRAM_DEV_SEL_ALL			0
 #define DRAM_DEV_SEL_0				(2 << 30)
 #define DRAM_DEV_SEL_1				(1 << 30)
-
-#define CLK_SOURCE_EMC				0x19c
-#define CLK_SOURCE_EMC_EMC_2X_CLK_DIVISOR_SHIFT	0
-#define CLK_SOURCE_EMC_EMC_2X_CLK_DIVISOR_MASK	0xff
-#define CLK_SOURCE_EMC_EMC_2X_CLK_SRC_SHIFT	29
-#define CLK_SOURCE_EMC_EMC_2X_CLK_SRC_MASK	0x7
 
 #define EMC_CFG_POWER_FEATURES_MASK		\
 	(EMC_CFG_DYN_SREF | EMC_CFG_DRAM_ACPD | EMC_CFG_DRAM_CLKSTOP_SR | \
@@ -845,8 +840,9 @@ static void emc_change_timing(struct tegra_emc *tegra,
 	 * to change timings.
 	 */
 
-	writel(car_value, tegra->clk_regs + CLK_SOURCE_EMC);
-	readl(tegra->clk_regs + CLK_SOURCE_EMC);
+	tegra124_car_initiate_emc_switch(
+		timing->parent_index,
+		timing->parent_rate / (timing->rate / 2) - 2);
 
 	/* Wait until the state machine has settled */
 
@@ -975,14 +971,6 @@ static int emc_set_timing(struct tegra_emc *tegra, struct emc_timing *timing)
 
 	tegra->changing_timing = true;
 
-	parent_rate = timing->parent_rate;
-	div = parent_rate / (timing->rate / 2) - 2;
-
-	car_value = 0;
-	car_value |= timing->parent_index <<
-		CLK_SOURCE_EMC_EMC_2X_CLK_SRC_SHIFT;
-	car_value |= div << CLK_SOURCE_EMC_EMC_2X_CLK_DIVISOR_SHIFT;
-
 	err = clk_set_rate(timing->parent, timing->parent_rate);
 	if (err) {
 		dev_err(&tegra->pdev->dev,
@@ -1000,7 +988,7 @@ static int emc_set_timing(struct tegra_emc *tegra, struct emc_timing *timing)
 		return err;
 	}
 
-	emc_change_timing(tegra, timing, car_value);
+	emc_change_timing(tegra, timing);
 
 	__clk_reparent(tegra->hw.clk, timing->parent);
 	clk_disable_unprepare(tegra->prev_parent);
