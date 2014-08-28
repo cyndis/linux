@@ -9,12 +9,12 @@
 #ifndef __SOC_TEGRA_MC_H__
 #define __SOC_TEGRA_MC_H__
 
-static int tegra_mc_write_emem_configuration(unsigned long rate) {
-	return -ENOSYS;
+static int tegra124_mc_write_emem_configuration(unsigned long rate) {
+	return -ENOTSUPP;
 }
 
-static int tegra_mc_get_emem_device_count(u8 *count) {
-	return -ENOSYS;
+static int tegra124_mc_get_emem_device_count(u8 *count) {
+	return -ENOTSUPP;
 }
 
 #endif /* __SOC_TEGRA_MC_H__ */
