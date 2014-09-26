@@ -22,7 +22,7 @@
 #include <linux/types.h>
 
 /**
- * struct tegra_dfll_soc - SoC-specific hooks/integration for the DFLL driver
+ * struct tegra_dfll_soc_data - SoC-specific hooks/integration for the DFLL driver
  * @opp_dev: struct device * that holds the OPP table for the DFLL
  * @min_millivolts: minimum voltage (in mV) that the DFLL can operate
  * @tune0_low: DFLL tuning register 0 (low voltage range)
