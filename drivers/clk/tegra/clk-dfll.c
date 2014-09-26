@@ -1037,7 +1037,7 @@ static struct clk_init_data dfll_clk_init_data = {
  *
  * Register the DFLL's output clock with the Linux clock framework and register
  * the DFLL driver as an OF clock provider. Returns 0 upon success or -EINVAL
- * upon failure.
+ * or -ENOMEM upon failure.
  */
 static int dfll_register_clk(struct tegra_dfll *td)
 {
