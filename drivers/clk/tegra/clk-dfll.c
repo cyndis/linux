@@ -106,7 +106,7 @@
 
 /* DFLL_OUTPUT_CFG: closed loop mode control registers */
 /* NOTE: access via dfll_i2c_{readl,writel} */
-#define DFLL_OUTPUT_CFG		0x20
+#define DFLL_OUTPUT_CFG			0x20
 #define DFLL_OUTPUT_CFG_I2C_ENABLE	(0x1 << 30)
 #define OUT_MASK			0x3f
 #define DFLL_OUTPUT_CFG_SAFE_SHIFT	24
@@ -120,14 +120,14 @@
 		(OUT_MASK << DFLL_OUTPUT_CFG_MIN_SHIFT)
 #define DFLL_OUTPUT_CFG_PWM_DELTA	(0x1 << 7)
 #define DFLL_OUTPUT_CFG_PWM_ENABLE	(0x1 << 6)
-#define DFLL_OUTPUT_CFG_PWM_DIV_SHIFT 0
+#define DFLL_OUTPUT_CFG_PWM_DIV_SHIFT	0
 #define DFLL_OUTPUT_CFG_PWM_DIV_MASK  \
 		(OUT_MASK << DFLL_OUTPUT_CFG_PWM_DIV_SHIFT)
 
 /* DFLL_OUTPUT_FORCE: closed loop mode voltage forcing control */
 #define DFLL_OUTPUT_FORCE		0x24
 #define DFLL_OUTPUT_FORCE_ENABLE	(0x1 << 6)
-#define DFLL_OUTPUT_FORCE_VALUE_SHIFT 0
+#define DFLL_OUTPUT_FORCE_VALUE_SHIFT	0
 #define DFLL_OUTPUT_FORCE_VALUE_MASK  \
 		(OUT_MASK << DFLL_OUTPUT_FORCE_VALUE_SHIFT)
 
