@@ -1260,8 +1260,8 @@ static void dfll_set_default_params(struct tegra_dfll *td)
  * @td: DFLL instance
  *
  * Call clk_get() on the DFLL source clocks and save the pointers for later
- * use. Returns 0 upon success or -ENODEV if one or more of the clocks
- * couldn't be looked up.
+ * use. Returns 0 upon success or error (see devm_clk_get) if one or more
+ * of the clocks couldn't be looked up.
  */
 static int dfll_init_clks(struct tegra_dfll *td)
 {
