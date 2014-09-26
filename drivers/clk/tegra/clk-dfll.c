@@ -379,12 +379,6 @@ int tegra_dfll_runtime_resume(struct device *dev)
 	struct tegra_dfll *td = dev_get_drvdata(dev);
 	int ret;
 
-	ret = clk_enable(td->i2c_clk);
-	if (ret) {
-		dev_err(dev, "could not enable I2C clock: %d\n", ret);
-		return ret;
-	}
-
 	ret = clk_enable(td->ref_clk);
 	if (ret) {
 		dev_err(dev, "could not enable ref clock: %d\n", ret);
@@ -394,6 +388,12 @@ int tegra_dfll_runtime_resume(struct device *dev)
 	ret = clk_enable(td->soc_clk);
 	if (ret) {
 		dev_err(dev, "could not enable register clock: %d\n", ret);
+		return ret;
+	}
+
+	ret = clk_enable(td->i2c_clk);
+	if (ret) {
+		dev_err(dev, "could not enable i2c clock: %d\n", ret);
 		return ret;
 	}
 
@@ -412,8 +412,8 @@ int tegra_dfll_runtime_suspend(struct device *dev)
 {
 	struct tegra_dfll *td = dev_get_drvdata(dev);
 
-	clk_disable(td->soc_clk);
 	clk_disable(td->ref_clk);
+	clk_disable(td->soc_clk);
 	clk_disable(td->i2c_clk);
 
 	return 0;
@@ -1310,21 +1310,21 @@ static int dfll_init(struct tegra_dfll *td)
 	if (td->soc->deassert_dvco_reset)
 		td->soc->deassert_dvco_reset();
 
-	ret = clk_prepare(td->i2c_clk);
-	if (ret) {
-		dev_err(td->dev, "failed to prepare i2c_clk\n");
-		return ret;
-	}
-
 	ret = clk_prepare(td->ref_clk);
 	if (ret) {
 		dev_err(td->dev, "failed to prepare ref_clk\n");
-		goto di_err1;
+		return ret;
 	}
 
 	ret = clk_prepare(td->soc_clk);
 	if (ret) {
 		dev_err(td->dev, "failed to prepare soc_clk\n");
+		goto di_err1;
+	}
+
+	ret = clk_prepare(td->i2c_clk);
+	if (ret) {
+		dev_err(td->dev, "failed to prepare i2c_clk\n");
 		goto di_err2;
 	}
 
@@ -1346,9 +1346,9 @@ static int dfll_init(struct tegra_dfll *td)
 	return 0;
 
 di_err2:
-	clk_unprepare(td->ref_clk);
+	clk_unprepare(td->soc_clk);
 di_err1:
-	clk_unprepare(td->i2c_clk);
+	clk_unprepare(td->ref_clk);
 
 	if (td->soc->assert_dvco_reset)
 		td->soc->assert_dvco_reset();
@@ -1728,8 +1728,8 @@ int tegra_dfll_unregister(struct platform_device *pdev)
 	dfll_unregister_clk(td);
 	pm_runtime_disable(&pdev->dev);
 
-	clk_unprepare(td->soc_clk);
 	clk_unprepare(td->ref_clk);
+	clk_unprepare(td->soc_clk);
 	clk_unprepare(td->i2c_clk);
 
 	if (td->soc->assert_dvco_reset)
