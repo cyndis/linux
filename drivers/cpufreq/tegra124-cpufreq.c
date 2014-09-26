@@ -179,17 +179,12 @@ static struct platform_driver tegra124_cpufreq_platdrv = {
 	.remove		= tegra124_cpufreq_remove,
 };
 
-static const struct of_device_id soc_of_matches[] = {
-	{ .compatible = "nvidia,tegra124", },
-	{}
-};
-
 static int __init tegra_cpufreq_init(void)
 {
 	int ret;
 	struct platform_device *pdev;
 
-	if (!of_match_machine(soc_of_matches))
+	if (!of_machine_is_compatible("nvidia,tegra124"))
 		return -ENODEV;
 
 	/*
