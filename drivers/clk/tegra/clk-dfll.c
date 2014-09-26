@@ -1600,16 +1600,17 @@ int tegra_dfll_register(struct platform_device *pdev,
 	struct tegra_dfll *td;
 	int ret;
 
+	if (!soc) {
+		dev_err(td->dev, "no tegra_dfll_soc_data provided\n");
+		return -EINVAL;
+	}
+
 	td = devm_kzalloc(&pdev->dev, sizeof(*td), GFP_KERNEL);
 	if (!td)
 		return -ENOMEM;
 	td->dev = &pdev->dev;
 	platform_set_drvdata(pdev, td);
 
-	if (!soc) {
-		dev_err(td->dev, "no tegra_dfll_soc_data provided\n");
-		return -EINVAL;
-	}
 	td->soc = soc;
 
 	td->vdd_reg = devm_regulator_get(td->dev, "vdd-cpu");
