@@ -104,6 +104,32 @@ void __init tegra_super_clk_gen4_init(void __iomem *clk_base,
 	struct clk *clk;
 	struct clk **dt_clk;
 
+	/*
+	 * Register PLL_X first so that CCLK_G has a parent at registration
+	 * time. This ensures that the common clock framework knows CCLK_G's
+	 * rate.
+	 */
+
+#if defined(CONFIG_ARCH_TEGRA_114_SOC) || defined(CONFIG_ARCH_TEGRA_124_SOC)
+	/* PLLX */
+	dt_clk = tegra_lookup_dt_id(tegra_clk_pll_x, tegra_clks);
+	if (!dt_clk)
+		return;
+
+	clk = tegra_clk_register_pllxc("pll_x", "pll_ref", clk_base,
+			pmc_base, CLK_IGNORE_UNUSED, params, NULL);
+	*dt_clk = clk;
+
+	/* PLLX_OUT0 */
+
+	dt_clk = tegra_lookup_dt_id(tegra_clk_pll_x_out0, tegra_clks);
+	if (!dt_clk)
+		return;
+	clk = clk_register_fixed_factor(NULL, "pll_x_out0", "pll_x",
+					CLK_SET_RATE_PARENT, 1, 2);
+	*dt_clk = clk;
+#endif
+
 	/* CCLKG */
 	dt_clk = tegra_lookup_dt_id(tegra_clk_cclk_g, tegra_clks);
 	if (dt_clk) {
@@ -127,25 +153,5 @@ void __init tegra_super_clk_gen4_init(void __iomem *clk_base,
 	}
 
 	tegra_sclk_init(clk_base, tegra_clks);
-
-#if defined(CONFIG_ARCH_TEGRA_114_SOC) || defined(CONFIG_ARCH_TEGRA_124_SOC)
-	/* PLLX */
-	dt_clk = tegra_lookup_dt_id(tegra_clk_pll_x, tegra_clks);
-	if (!dt_clk)
-		return;
-
-	clk = tegra_clk_register_pllxc("pll_x", "pll_ref", clk_base,
-			pmc_base, CLK_IGNORE_UNUSED, params, NULL);
-	*dt_clk = clk;
-
-	/* PLLX_OUT0 */
-
-	dt_clk = tegra_lookup_dt_id(tegra_clk_pll_x_out0, tegra_clks);
-	if (!dt_clk)
-		return;
-	clk = clk_register_fixed_factor(NULL, "pll_x_out0", "pll_x",
-					CLK_SET_RATE_PARENT, 1, 2);
-	*dt_clk = clk;
-#endif
 }
 
