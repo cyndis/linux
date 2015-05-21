@@ -1145,6 +1145,7 @@ static const struct of_device_id host1x_drm_subdevs[] = {
 	{ .compatible = "nvidia,tegra124-dc", },
 	{ .compatible = "nvidia,tegra124-sor", },
 	{ .compatible = "nvidia,tegra124-hdmi", },
+	{ .compatible = "nvidia,tegra124-vic", },
 	{ /* sentinel */ }
 };
 
@@ -1194,8 +1195,14 @@ static int __init host1x_drm_init(void)
 	if (err < 0)
 		goto unregister_gr2d;
 
+	err = platform_driver_register(&tegra_vic_driver);
+	if (err < 0)
+		goto unregister_gr3d;
+
 	return 0;
 
+unregister_gr3d:
+	platform_driver_unregister(&tegra_gr3d_driver);
 unregister_gr2d:
 	platform_driver_unregister(&tegra_gr2d_driver);
 unregister_dpaux:
