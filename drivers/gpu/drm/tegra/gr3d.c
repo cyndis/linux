@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2013 Avionic Design GmbH
- * Copyright (C) 2013 NVIDIA Corporation
+ * Copyright (C) 2013-2015 NVIDIA Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -94,7 +94,7 @@ static void gr3d_close_channel(struct tegra_drm_context *context)
 	host1x_channel_put(context->channel);
 }
 
-static int gr3d_is_addr_reg(struct device *dev, u32 class, u32 offset)
+static int gr3d_is_addr_reg(struct device *dev, u32 class, u32 offset, u32 val)
 {
 	struct gr3d *gr3d = dev_get_drvdata(dev);
 
