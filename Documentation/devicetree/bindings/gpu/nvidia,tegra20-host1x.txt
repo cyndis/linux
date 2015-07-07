@@ -240,6 +240,21 @@ of the following host1x client modules:
     - dpaux
   - vdd-supply: phandle of a supply that powers the DisplayPort link
 
+- vic: Video Image Compositor
+  - compatible: For Tegra124, must contain "nvidia,tegra124-vic".  Otherwise,
+    must contain '"nvidia,<chip>-vic", "nvidia,tegra124-vic"', where
+    <chip> is tegra132.
+  - reg: Physical base address and length of the controller's registers.
+  - interrupts: The interrupt outputs from the controller.
+  - clocks: Must contain an entry for each entry in clock-names.
+    See ../clocks/clock-bindings.txt for details.
+  - clock-names: Must include the following entries:
+    - vic: clock input for the VIC hardware
+  - resets: Must contain an entry for each entry in reset-names.
+    See ../reset/reset.txt for details.
+  - reset-names: Must include the following entries:
+    - vic
+
 Example:
 
 / {
