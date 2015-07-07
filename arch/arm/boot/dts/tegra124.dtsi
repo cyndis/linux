@@ -95,6 +95,8 @@
 
 		ranges = <0 0x54000000 0 0x54000000 0 0x01000000>;
 
+		iommus = <&mc TEGRA_SWGROUP_HC>;
+
 		dc@0,54200000 {
 			compatible = "nvidia,tegra124-dc";
 			reg = <0x0 0x54200000 0x0 0x00040000>;
