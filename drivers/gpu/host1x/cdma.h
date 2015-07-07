@@ -47,6 +47,7 @@ struct push_buffer {
 	u32 fence;			/* index we've written */
 	u32 pos;			/* index to write to */
 	u32 size_bytes;
+	u32 alloc_size_bytes;
 };
 
 struct buffer_timeout {

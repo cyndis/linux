@@ -19,6 +19,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/err.h>
 #include <linux/host1x.h>
+#include <linux/iommu.h>
 #include <linux/kref.h>
 #include <linux/module.h>
 #include <linux/scatterlist.h>
@@ -176,7 +177,9 @@ static int do_waitchks(struct host1x_job *job, struct host1x *host,
 
 static unsigned int pin_job(struct host1x_job *job)
 {
+	struct host1x *host = dev_get_drvdata(job->channel->dev->parent);
 	unsigned int i;
+	size_t map_sz;
 
 	job->num_unpins = 0;
 
@@ -211,6 +214,28 @@ static unsigned int pin_job(struct host1x_job *job)
 		phys_addr = host1x_bo_pin(g->bo, &sgt);
 		if (!phys_addr)
 			goto unpin;
+
+		/*
+		 * If IOMMU is enabled, we need to map gather buffers into
+		 * host1x's domain. However, if the firewall is enabled,
+		 * we don't, since the firewall will copy all buffers into
+		 * a separate allocation in the domain anyway.
+		 *
+		 * The mapping cannot overlap with the CDMA buffer mapping
+		 * since both are mapped at their physical addresses.
+		 */
+		// FIXME the above note is not necessarily true when sgt->nents > 1.
+		if (!IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL) && host->domain) {
+			phys_addr = page_to_phys(sg_page(&sgt->sgl[0])) +
+					sgt->sgl[0].offset;
+			map_sz = iommu_map_sg(host->domain, phys_addr, sgt->sgl,
+					      sgt->nents,
+					      IOMMU_READ | IOMMU_WRITE);
+			if (!map_sz)
+				goto unpin;
+
+			job->unpins[job->num_unpins].map_sz = map_sz;
+		}
 
 		job->addr_phys[job->num_unpins] = phys_addr;
 		job->unpins[job->num_unpins].bo = g->bo;
@@ -472,6 +497,7 @@ out:
 
 static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 {
+	struct host1x *host = dev_get_drvdata(job->channel->dev->parent);
 	struct host1x_firewall fw;
 	size_t size = 0;
 	size_t offset = 0;
@@ -487,6 +513,10 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 		struct host1x_job_gather *g = &job->gathers[i];
 		size += g->words * sizeof(u32);
 	}
+
+	/* IOMMU mappings need to be page-aligned */
+	if (host->domain)
+		size = PAGE_ALIGN(size);
 
 	job->gather_copy_mapped = dma_alloc_writecombine(dev, size,
 							 &job->gather_copy,
@@ -522,6 +552,10 @@ static inline int copy_gathers(struct host1x_job *job, struct device *dev)
 	/* No relocs should remain at this point */
 	if (fw.num_relocs)
 		return -EINVAL;
+
+	if (host->domain)
+		iommu_map(host->domain, job->gather_copy, job->gather_copy,
+			  size, IOMMU_READ | IOMMU_WRITE);
 
 	return 0;
 }
@@ -592,19 +626,28 @@ EXPORT_SYMBOL(host1x_job_pin);
 
 void host1x_job_unpin(struct host1x_job *job)
 {
+	struct host1x *host = dev_get_drvdata(job->channel->dev->parent);
 	unsigned int i;
 
 	for (i = 0; i < job->num_unpins; i++) {
 		struct host1x_job_unpin_data *unpin = &job->unpins[i];
+		if (!IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL) && host->domain)
+			iommu_unmap(host->domain, job->addr_phys[i],
+				    unpin->map_sz);
 		host1x_bo_unpin(unpin->bo, unpin->sgt);
 		host1x_bo_put(unpin->bo);
 	}
 	job->num_unpins = 0;
 
-	if (job->gather_copy_size)
+	if (job->gather_copy_size) {
+		if (host->domain)
+			iommu_unmap(host->domain, job->gather_copy,
+				    job->gather_copy_size);
+
 		dma_free_writecombine(job->channel->dev, job->gather_copy_size,
 				      job->gather_copy_mapped,
 				      job->gather_copy);
+	}
 }
 EXPORT_SYMBOL(host1x_job_unpin);
 

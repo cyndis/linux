@@ -51,6 +51,9 @@ static void host1x_pushbuffer_destroy(struct push_buffer *pb)
 	struct host1x_cdma *cdma = pb_to_cdma(pb);
 	struct host1x *host1x = cdma_to_host1x(cdma);
 
+	if (host1x->domain)
+		iommu_unmap(host1x->domain, pb->phys, pb->alloc_size_bytes);
+
 	if (pb->phys != 0)
 		dma_free_writecombine(host1x->dev, pb->size_bytes + 4,
 				      pb->mapped, pb->phys);
@@ -66,28 +69,43 @@ static int host1x_pushbuffer_init(struct push_buffer *pb)
 {
 	struct host1x_cdma *cdma = pb_to_cdma(pb);
 	struct host1x *host1x = cdma_to_host1x(cdma);
+	int err;
 
 	pb->mapped = NULL;
 	pb->phys = 0;
 	pb->size_bytes = HOST1X_PUSHBUFFER_SLOTS * 8;
+	pb->alloc_size_bytes = pb->size_bytes + 4;
+	if (host1x->domain)
+		pb->alloc_size_bytes = PAGE_ALIGN(pb->alloc_size_bytes);
 
 	/* initialize buffer pointers */
 	pb->fence = pb->size_bytes - 8;
 	pb->pos = 0;
 
 	/* allocate and map pushbuffer memory */
-	pb->mapped = dma_alloc_writecombine(host1x->dev, pb->size_bytes + 4,
+	pb->mapped = dma_alloc_writecombine(host1x->dev, pb->alloc_size_bytes,
 					    &pb->phys, GFP_KERNEL);
 	if (!pb->mapped)
-		goto fail;
+		return -ENOMEM;
+
+	if (host1x->domain) {
+		err = iommu_map(host1x->domain, pb->phys, pb->phys,
+				pb->alloc_size_bytes, IOMMU_READ | IOMMU_WRITE);
+		if (err < 0)
+			goto free_mapped;
+	}
 
 	host1x_hw_pushbuffer_init(host1x, pb);
 
 	return 0;
 
-fail:
-	host1x_pushbuffer_destroy(pb);
-	return -ENOMEM;
+free_mapped:
+	dma_free_writecombine(host1x->dev, pb->alloc_size_bytes, pb->mapped,
+			      pb->phys);
+	pb->mapped = NULL;
+	pb->phys = 0;
+
+	return err;
 }
 
 /*

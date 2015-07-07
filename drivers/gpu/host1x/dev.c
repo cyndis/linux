@@ -156,10 +156,20 @@ static int host1x_probe(struct platform_device *pdev)
 		return err;
 	}
 
+	if (iommu_present(&platform_bus_type)) {
+		host->domain = iommu_domain_alloc(&platform_bus_type);
+		if (!host->domain)
+			return -ENOMEM;
+
+		err = iommu_attach_device(host->domain, &pdev->dev);
+		if (err < 0)
+			goto fail_free_domain;
+	}
+
 	err = clk_prepare_enable(host->clk);
 	if (err < 0) {
 		dev_err(&pdev->dev, "failed to enable clock\n");
-		return err;
+		goto fail_detach_device;
 	}
 
 	err = host1x_syncpt_init(host);
@@ -188,6 +198,13 @@ fail_deinit_syncpt:
 	host1x_syncpt_deinit(host);
 fail_unprepare_disable:
 	clk_disable_unprepare(host->clk);
+fail_detach_device:
+	if (iommu_present(&platform_bus_type))
+		iommu_detach_device(host->domain, &pdev->dev);
+fail_free_domain:
+	if (iommu_present(&platform_bus_type))
+		iommu_domain_free(host->domain);
+
 	return err;
 }
 
