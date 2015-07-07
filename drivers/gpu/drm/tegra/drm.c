@@ -1,12 +1,13 @@
 /*
  * Copyright (C) 2012 Avionic Design GmbH
- * Copyright (C) 2012-2013 NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (C) 2012-2015 NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
 
+#include <linux/bitops.h>
 #include <linux/host1x.h>
 #include <linux/iommu.h>
 
@@ -22,6 +23,8 @@
 #define DRIVER_MAJOR 0
 #define DRIVER_MINOR 0
 #define DRIVER_PATCHLEVEL 0
+
+#define IOVA_AREA_SZ (1024 * 1024 * 64) /* 64 MiB */
 
 struct tegra_drm_file {
 	struct list_head contexts;
@@ -127,7 +130,8 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 
 	if (iommu_present(&platform_bus_type)) {
 		struct iommu_domain_geometry *geometry;
-		u64 start, end;
+		unsigned long order;
+		u64 iova_start, start, end;
 
 		tegra->domain = iommu_domain_alloc(&platform_bus_type);
 		if (!tegra->domain) {
@@ -138,10 +142,17 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 		geometry = &tegra->domain->geometry;
 		start = geometry->aperture_start;
 		end = geometry->aperture_end;
+		iova_start = end - IOVA_AREA_SZ + 1;
 
-		DRM_DEBUG_DRIVER("IOMMU aperture initialized (%#llx-%#llx)\n",
-				 start, end);
-		drm_mm_init(&tegra->mm, start, end - start + 1);
+		order = __ffs(tegra->domain->pgsize_bitmap);
+		init_iova_domain(&tegra->iova, 1UL << order,
+				 iova_start >> order,
+				 end >> order);
+
+		drm_mm_init(&tegra->mm, start, iova_start - start);
+
+		DRM_DEBUG("IOMMU apertures initialized (GEM: %#llx-%#llx, IOVA: %#llx-%#llx)\n",
+			  start, iova_start-1, iova_start, end);
 	}
 
 	mutex_init(&tegra->clients_lock);
@@ -208,6 +219,7 @@ config:
 	if (tegra->domain) {
 		iommu_domain_free(tegra->domain);
 		drm_mm_takedown(&tegra->mm);
+		put_iova_domain(&tegra->iova);
 	}
 free:
 	kfree(tegra);
@@ -232,6 +244,7 @@ static int tegra_drm_unload(struct drm_device *drm)
 	if (tegra->domain) {
 		iommu_domain_free(tegra->domain);
 		drm_mm_takedown(&tegra->mm);
+		put_iova_domain(&tegra->iova);
 	}
 
 	kfree(tegra);
@@ -973,6 +986,81 @@ int tegra_drm_unregister_client(struct tegra_drm *tegra,
 	mutex_unlock(&tegra->clients_lock);
 
 	return 0;
+}
+
+void *tegra_drm_alloc(struct tegra_drm *tegra, size_t size,
+			      dma_addr_t *iova)
+{
+	struct iova *alloc;
+	unsigned long shift;
+	void *virt;
+	gfp_t gfp;
+	int err;
+
+	if (tegra->domain)
+		size = iova_align(&tegra->iova, size);
+	else
+		size = PAGE_ALIGN(size);
+
+	gfp = GFP_KERNEL | __GFP_ZERO;
+	if (!tegra->domain) {
+		/*
+		 * Tegra210 has 64-bit physical addresses but units only support
+		 * 32-bit addresses, so if we don't have an IOMMU to do
+		 * translation, force allocations to be in the 32-bit range.
+		 */
+		gfp |= GFP_DMA;
+	}
+
+	virt = (void *)__get_free_pages(gfp, get_order(size));
+	if (!virt)
+		return NULL;
+
+	if (!tegra->domain) {
+		/*
+		 * If IOMMU is disabled, devices address physical memory
+		 * directly.
+		 */
+		*iova = virt_to_phys(virt);
+		return virt;
+	}
+
+	shift = iova_shift(&tegra->iova);
+	alloc = alloc_iova(&tegra->iova, size >> shift,
+			   tegra->domain->geometry.aperture_end >> shift, true);
+	if (!alloc)
+		goto free_pages;
+
+	*iova = iova_dma_addr(&tegra->iova, alloc);
+	err = iommu_map(tegra->domain, *iova, virt_to_phys(virt),
+			size, IOMMU_READ | IOMMU_WRITE);
+	if (err < 0)
+		goto free_iova;
+
+	return virt;
+
+free_iova:
+	__free_iova(&tegra->iova, alloc);
+free_pages:
+	free_pages((unsigned long)virt, get_order(size));
+
+	return NULL;
+}
+
+void tegra_drm_free(struct tegra_drm *tegra, size_t size, void *virt,
+		    dma_addr_t iova)
+{
+	if (tegra->domain)
+		size = iova_align(&tegra->iova, size);
+	else
+		size = PAGE_ALIGN(size);
+
+	if (tegra->domain) {
+		iommu_unmap(tegra->domain, iova, size);
+		free_iova(&tegra->iova, iova_pfn(&tegra->iova, iova));
+	}
+
+	free_pages((unsigned long)virt, get_order(size));
 }
 
 static int host1x_drm_probe(struct host1x_device *dev)
