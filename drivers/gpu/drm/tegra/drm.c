@@ -1,12 +1,13 @@
 /*
  * Copyright (C) 2012 Avionic Design GmbH
- * Copyright (C) 2012-2013 NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (C) 2012-2016 NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
 
+#include <linux/bitops.h>
 #include <linux/host1x.h>
 #include <linux/iommu.h>
 
@@ -22,6 +23,8 @@
 #define DRIVER_MAJOR 0
 #define DRIVER_MINOR 0
 #define DRIVER_PATCHLEVEL 0
+
+#define CARVEOUT_SZ SZ_64M
 
 struct tegra_drm_file {
 	struct list_head contexts;
@@ -127,7 +130,8 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 
 	if (iommu_present(&platform_bus_type)) {
 		struct iommu_domain_geometry *geometry;
-		u64 start, end;
+		unsigned long order;
+		u64 carveout_start, carveout_end, gem_start, gem_end;
 
 		tegra->domain = iommu_domain_alloc(&platform_bus_type);
 		if (!tegra->domain) {
@@ -136,12 +140,25 @@ static int tegra_drm_load(struct drm_device *drm, unsigned long flags)
 		}
 
 		geometry = &tegra->domain->geometry;
-		start = geometry->aperture_start;
-		end = geometry->aperture_end;
+		gem_start = geometry->aperture_start;
+		gem_end = geometry->aperture_end - CARVEOUT_SZ;
+		carveout_start = gem_end + 1;
+		carveout_end = geometry->aperture_end;
 
-		DRM_DEBUG_DRIVER("IOMMU aperture initialized (%#llx-%#llx)\n",
-				 start, end);
-		drm_mm_init(&tegra->mm, start, end - start + 1);
+		order = __ffs(tegra->domain->pgsize_bitmap);
+		init_iova_domain(&tegra->carveout.domain, 1UL << order,
+				 carveout_start >> order,
+				 carveout_end >> order);
+
+		tegra->carveout.shift = iova_shift(&tegra->carveout.domain);
+		tegra->carveout.limit = carveout_end >> tegra->carveout.shift;
+
+		drm_mm_init(&tegra->mm, gem_start, gem_end - gem_start + 1);
+
+		DRM_DEBUG("IOMMU apertures:\n");
+		DRM_DEBUG("  GEM: %#llx-%#llx\n", gem_start, gem_end);
+		DRM_DEBUG("  Carveout: %#llx-%#llx\n", carveout_start,
+			  carveout_end);
 	}
 
 	mutex_init(&tegra->clients_lock);
@@ -208,6 +225,7 @@ config:
 	if (tegra->domain) {
 		iommu_domain_free(tegra->domain);
 		drm_mm_takedown(&tegra->mm);
+		put_iova_domain(&tegra->carveout.domain);
 	}
 free:
 	kfree(tegra);
@@ -232,6 +250,7 @@ static int tegra_drm_unload(struct drm_device *drm)
 	if (tegra->domain) {
 		iommu_domain_free(tegra->domain);
 		drm_mm_takedown(&tegra->mm);
+		put_iova_domain(&tegra->carveout.domain);
 	}
 
 	kfree(tegra);
@@ -973,6 +992,84 @@ int tegra_drm_unregister_client(struct tegra_drm *tegra,
 	mutex_unlock(&tegra->clients_lock);
 
 	return 0;
+}
+
+void *tegra_drm_alloc(struct tegra_drm *tegra, size_t size,
+			      dma_addr_t *dma)
+{
+	struct iova *alloc;
+	void *virt;
+	gfp_t gfp;
+	int err;
+
+	if (tegra->domain)
+		size = iova_align(&tegra->carveout.domain, size);
+	else
+		size = PAGE_ALIGN(size);
+
+	gfp = GFP_KERNEL | __GFP_ZERO;
+	if (!tegra->domain) {
+		/*
+		 * Many units only support 32-bit addresses, even on 64-bit
+		 * SoCs. If there is no IOMMU to translate into a 32-bit IO
+		 * virtual address space, force allocations to be in the
+		 * lower 32-bit range.
+		 */
+		gfp |= GFP_DMA;
+	}
+
+	virt = (void *)__get_free_pages(gfp, get_order(size));
+	if (!virt)
+		return ERR_PTR(-ENOMEM);
+
+	if (!tegra->domain) {
+		/*
+		 * If IOMMU is disabled, devices address physical memory
+		 * directly.
+		 */
+		*dma = virt_to_phys(virt);
+		return virt;
+	}
+
+	alloc = alloc_iova(&tegra->carveout.domain,
+			   size >> tegra->carveout.shift,
+			   tegra->carveout.limit, true);
+	if (!alloc) {
+		err = -EBUSY;
+		goto free_pages;
+	}
+
+	*dma = iova_dma_addr(&tegra->carveout.domain, alloc);
+	err = iommu_map(tegra->domain, *dma, virt_to_phys(virt),
+			size, IOMMU_READ | IOMMU_WRITE);
+	if (err < 0)
+		goto free_iova;
+
+	return virt;
+
+free_iova:
+	__free_iova(&tegra->carveout.domain, alloc);
+free_pages:
+	free_pages((unsigned long)virt, get_order(size));
+
+	return ERR_PTR(err);
+}
+
+void tegra_drm_free(struct tegra_drm *tegra, size_t size, void *virt,
+		    dma_addr_t dma)
+{
+	if (tegra->domain)
+		size = iova_align(&tegra->carveout.domain, size);
+	else
+		size = PAGE_ALIGN(size);
+
+	if (tegra->domain) {
+		iommu_unmap(tegra->domain, dma, size);
+		free_iova(&tegra->carveout.domain,
+			  iova_pfn(&tegra->carveout.domain, dma));
+	}
+
+	free_pages((unsigned long)virt, get_order(size));
 }
 
 static int host1x_drm_probe(struct host1x_device *dev)
