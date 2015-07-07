@@ -42,6 +42,11 @@ struct tegra_drm {
 	struct iommu_domain *domain;
 	struct drm_mm mm;
 
+	struct mutex iova_lock;
+	dma_addr_t iova_start;
+	unsigned long *iova_bitmap;
+	unsigned int iova_bitmap_bits;
+
 	struct mutex clients_lock;
 	struct list_head clients;
 
@@ -100,6 +105,10 @@ int tegra_drm_unregister_client(struct tegra_drm *tegra,
 
 int tegra_drm_init(struct tegra_drm *tegra, struct drm_device *drm);
 int tegra_drm_exit(struct tegra_drm *tegra);
+
+void *tegra_drm_alloc(struct tegra_drm *tegra, size_t size, dma_addr_t *iova);
+void tegra_drm_free(struct tegra_drm *tegra, size_t size, void *virt,
+		    dma_addr_t iova);
 
 struct tegra_dc_soc_info;
 struct tegra_output;
