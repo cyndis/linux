@@ -162,8 +162,12 @@ static int host1x_probe(struct platform_device *pdev)
 			return -ENOMEM;
 
 		err = iommu_attach_device(host->domain, &pdev->dev);
-		if (err < 0)
-			goto fail_free_domain;
+		if (err < 0) {
+			iommu_domain_free(host->domain);
+			host->domain = NULL;
+			dev_warn(&pdev->dev,
+				 "failed to attach to IOMMU domain, but continuing\n");
+		}
 	}
 
 	err = clk_prepare_enable(host->clk);
@@ -199,11 +203,10 @@ fail_deinit_syncpt:
 fail_unprepare_disable:
 	clk_disable_unprepare(host->clk);
 fail_detach_device:
-	if (iommu_present(&platform_bus_type))
+	if (iommu_present(&platform_bus_type) && host->domain) {
 		iommu_detach_device(host->domain, &pdev->dev);
-fail_free_domain:
-	if (iommu_present(&platform_bus_type))
 		iommu_domain_free(host->domain);
+	}
 
 	return err;
 }
