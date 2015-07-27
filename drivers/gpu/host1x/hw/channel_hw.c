@@ -132,12 +132,15 @@ static int channel_submit(struct host1x_job *job)
 
 	trace_host1x_channel_submit(dev_name(ch->dev),
 				    job->num_gathers, job->num_relocs,
-				    job->num_waitchk, job->syncpts[0].id,
-				    job->syncpts[0].incrs);
+				    job->num_waitchk,
+				    job->num_syncpts ? job->syncpts[0].id : 0,
+				    job->num_syncpts ? job->syncpts[0].incrs:0);
 
 	/* before error checks, return current max */
-	syncpt = host1x_syncpt_get(host, job->syncpts[0].id);
-	prev_max = host1x_syncpt_read_max(syncpt);
+	if (job->num_syncpts) {
+		syncpt = host1x_syncpt_get(host, job->syncpts[0].id);
+		prev_max = host1x_syncpt_read_max(syncpt);
+	}
 
 	/* get submit lock */
 	err = mutex_lock_interruptible(&ch->submitlock);
@@ -190,7 +193,7 @@ static int channel_submit(struct host1x_job *job)
 	host1x_cdma_end(&ch->cdma, job);
 
 	trace_host1x_channel_submitted(dev_name(ch->dev), prev_max,
-				       job->syncpts[0].end);
+				       job->num_syncpts ?job->syncpts[0].end:0);
 
 	/* schedule submit complete interrupts */
 	for (i = 0; i < job->num_syncpts; ++i) {
@@ -203,6 +206,10 @@ static int channel_submit(struct host1x_job *job)
 		completed_waiter[i] = NULL;
 		WARN(err, "Failed to set submit complete interrupt");
 	}
+
+	/* if there are no syncpoints, don't wait for one */
+	if (!job->num_syncpts)
+		host1x_cdma_update(&ch->cdma);
 
 	mutex_unlock(&ch->submitlock);
 
