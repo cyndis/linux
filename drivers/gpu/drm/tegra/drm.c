@@ -17,6 +17,10 @@
 #include "drm.h"
 #include "gem.h"
 
+#ifdef CONFIG_SYNC
+#include "../../../staging/android/sync.h"
+#endif
+
 #define DRIVER_NAME "tegra"
 #define DRIVER_DESC "NVIDIA Tegra graphics"
 #define DRIVER_DATE "20120330"
@@ -340,37 +344,208 @@ static int host1x_reloc_copy_from_user(struct host1x_reloc *dest,
 	return 0;
 }
 
+#ifdef CONFIG_SYNC
+struct syncpt_sync_fence_waiter {
+	struct sync_fence_waiter base;
+	struct host1x_syncpt *syncpt;
+};
+
+void syncpt_sync_fence_waiter_cb(struct sync_fence *fence,
+				 struct sync_fence_waiter *waiter)
+{
+	struct syncpt_sync_fence_waiter *syncpt_waiter =
+		container_of(waiter, struct syncpt_sync_fence_waiter, base);
+
+	host1x_syncpt_incr(syncpt_waiter->syncpt);
+}
+#endif
+
 int tegra_drm_submit(struct tegra_drm_context *context,
 		     struct drm_tegra_submit *args, struct drm_device *drm,
 		     struct drm_file *file)
 {
+#ifdef CONFIG_SYNC
+	struct host1x *host = dev_get_drvdata(drm->dev->parent);
+#endif
 	unsigned int num_cmdbufs = args->num_cmdbufs;
 	unsigned int num_relocs = args->num_relocs;
-	unsigned int num_waitchks = args->num_waitchks;
+	unsigned int num_waitchks = 0;
+	unsigned int num_syncpts = 0;
 	struct drm_tegra_cmdbuf __user *cmdbufs =
 		(void __user *)(uintptr_t)args->cmdbufs;
 	struct drm_tegra_reloc __user *relocs =
 		(void __user *)(uintptr_t)args->relocs;
-	struct drm_tegra_waitchk __user *waitchks =
-		(void __user *)(uintptr_t)args->waitchks;
-	struct drm_tegra_syncpt syncpt;
+	struct drm_tegra_pre_fence __user *pre_fences =
+		(void __user *)(uintptr_t)args->pre_fences;
+	struct drm_tegra_post_fence __user *post_fences =
+		(void __user *)(uintptr_t)args->post_fences;
 	struct host1x_job *job;
-	int err;
+	struct host1x_waitchk *waitchk;
+	struct host1x_job_syncpt *syncpt;
+	int err, i;
 
-	/* We don't yet support other than one syncpt_incr struct per submit */
-	if (args->num_syncpts != 1)
-		return -EINVAL;
+	/* Calculate number of needed waitchks and syncpts */
+
+	for (i = 0; i < args->num_pre_fences; ++i) {
+		struct drm_tegra_pre_fence pre_fence;
+		if (copy_from_user(&pre_fence, pre_fences + i,
+				   sizeof(pre_fence)))
+			return -EFAULT;
+
+		switch (pre_fence.type) {
+		case DRM_TEGRA_PRE_FENCE_HOST1X_SYNCPOINT_USER_WAIT:
+			num_waitchks += 1;
+			break;
+		case DRM_TEGRA_PRE_FENCE_SYNC_FENCE:
+#ifndef CONFIG_SYNC
+			return -ENOSYS;
+#endif
+			break;
+		}
+	}
+
+	for (i = 0; i < args->num_post_fences; ++i) {
+		struct drm_tegra_post_fence post_fence;
+		if (copy_from_user(&post_fence, post_fences + i,
+				   sizeof(post_fence)))
+			return -EFAULT;
+
+		switch (post_fence.type) {
+		case DRM_TEGRA_POST_FENCE_HOST1X_SYNCPOINT_USER_INCR:
+			num_syncpts += 1;
+			break;
+		case DRM_TEGRA_POST_FENCE_SYNC_FENCE_PACK:
+#ifndef CONFIG_SYNC
+			return -ENOSYS;
+#endif
+			break;
+		}
+	}
+
+	/* Create host1x job object */
 
 	job = host1x_job_alloc(context->channel, args->num_cmdbufs,
-			       args->num_relocs, args->num_waitchks, 1);
+			       args->num_relocs, num_waitchks, num_syncpts);
 	if (!job)
 		return -ENOMEM;
 
 	job->num_relocs = args->num_relocs;
-	job->num_waitchk = args->num_waitchks;
+	job->num_waitchk = num_waitchks;
+	job->num_syncpts = num_syncpts;
 	job->client = (u32)args->context;
 	job->class = context->client->base.class;
 	job->serialize = true;
+	job->is_addr_reg = context->client->ops->is_addr_reg;
+	job->timeout = 10000;
+
+	if (args->timeout && args->timeout < 10000)
+		job->timeout = args->timeout;
+
+	/* Setup prefences */
+
+	waitchk = job->waitchk;
+
+	for (i = 0; i < args->num_pre_fences; ++i) {
+		struct drm_tegra_pre_fence fence;
+		if (copy_from_user(&fence, pre_fences + i, sizeof(fence))) {
+			err = -EFAULT;
+			goto fail;
+		}
+
+		switch (fence.type) {
+		case DRM_TEGRA_PRE_FENCE_HOST1X_SYNCPOINT_USER_WAIT: {
+			struct drm_tegra_waitchk *args =
+				&fence.host1x_syncpoint_user_wait;
+			waitchk->bo = host1x_bo_lookup(drm, file, args->handle);
+			if (!waitchk->bo) {
+				err = -ENOENT;
+				goto fail;
+			}
+			waitchk->offset = args->offset;
+			waitchk->syncpt_id = args->syncpt;
+			waitchk->thresh = args->thresh;
+
+			++waitchk;
+			break;
+		}
+		case DRM_TEGRA_PRE_FENCE_SYNC_FENCE: {
+#ifdef CONFIG_SYNC
+			struct host1x_syncpt *syncpt;
+			u32 wait_thresh;
+			struct host1x_sync_pt *prev_pt;
+			struct sync_fence *prev_fence, *merged;
+			struct syncpt_sync_fence_waiter *waiter;
+			struct sync_fence *sf = sync_fence_fdget(
+					pre_fences[i].fence_fd);
+
+			if (!sf) {
+				err = -ENOENT;
+				goto fail;
+			}
+
+			if (!host1x_sync_fence_wait(sf, host, job->channel)) {
+				/* Ok, no further waits required */
+				sync_fence_put(sf);
+				break;
+			}
+
+			/*
+			 * Because of serialization, processing of
+			 * further submits will stall until the
+			 * callback we place below increments `syncpt'.
+			 */
+
+			syncpt = context->client->base.syncpts[0];
+			host1x_syncpt_incr_max(syncpt, 1);
+			wait_thresh = host1x_syncpt_read_max(syncpt) - 1;
+			prev_pt = host1x_sync_pt_create(host, syncpt,
+							wait_thresh);
+			prev_fence = sync_fence_create("host1x_prev_job",
+					(struct sync_pt *)prev_pt);
+			merged = sync_fence_merge("host1x_async_submit", sf,
+						  prev_fence);
+			sync_fence_put(prev_fence);
+
+			waiter = kzalloc(sizeof(*waiter), GFP_KERNEL);
+			sync_fence_waiter_init(&waiter->base,
+					       syncpt_sync_fence_waiter_cb);
+			waiter->syncpt = syncpt;
+			sync_fence_wait_async(merged, &waiter->base);
+
+			break;
+#else
+			err = -ENOSYS;
+			goto fail;
+#endif
+		}
+		}
+	}
+
+	/* Setup postfences */
+
+	syncpt = job->syncpts;
+
+	for (i = 0; i < args->num_post_fences; ++i) {
+		struct drm_tegra_post_fence post_fence;
+		if (copy_from_user(&post_fence, post_fences + i,
+				   sizeof(post_fence)))
+			return -EFAULT;
+
+		switch (post_fence.type) {
+		case DRM_TEGRA_POST_FENCE_HOST1X_SYNCPOINT_USER_INCR: {
+			struct drm_tegra_syncpt *fence_sp =
+				&post_fence.host1x_syncpoint_user_incr.syncpt;
+			syncpt->id = fence_sp->id;
+			syncpt->incrs = fence_sp->incrs;
+			++syncpt;
+			break;
+		}
+		case DRM_TEGRA_POST_FENCE_SYNC_FENCE_PACK:
+			break;
+		}
+	}
+
+	/* Setup command buffers and buffer relocations */
 
 	while (num_cmdbufs) {
 		struct drm_tegra_cmdbuf cmdbuf;
@@ -392,7 +567,6 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		cmdbufs++;
 	}
 
-	/* copy and resolve relocations from submit */
 	while (num_relocs--) {
 		err = host1x_reloc_copy_from_user(&job->relocarray[num_relocs],
 						  &relocs[num_relocs], drm,
@@ -401,26 +575,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 			goto fail;
 	}
 
-	if (copy_from_user(job->waitchk, waitchks,
-			   sizeof(*waitchks) * num_waitchks)) {
-		err = -EFAULT;
-		goto fail;
-	}
-
-	if (copy_from_user(&syncpt, (void __user *)(uintptr_t)args->syncpts,
-			   sizeof(syncpt))) {
-		err = -EFAULT;
-		goto fail;
-	}
-
-	job->is_addr_reg = context->client->ops->is_addr_reg;
-	job->num_syncpts = 1;
-	job->syncpts[0].incrs = syncpt.incrs;
-	job->syncpts[0].id = syncpt.id;
-	job->timeout = 10000;
-
-	if (args->timeout && args->timeout < 10000)
-		job->timeout = args->timeout;
+	/* Submit job */
 
 	err = host1x_job_pin(job, context->client->base.dev);
 	if (err)
@@ -430,7 +585,52 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	if (err)
 		goto fail_submit;
 
-	args->fence = job->syncpts[0].end;
+	/* Return postfences to userspace */
+
+	syncpt = job->syncpts;
+	for (i = 0; i < args->num_post_fences; ++i) {
+		struct drm_tegra_post_fence *post_fence = post_fences + i;
+
+		switch (post_fence->type) {
+		case DRM_TEGRA_POST_FENCE_HOST1X_SYNCPOINT_USER_INCR:
+			post_fence->host1x_syncpoint_user_incr.fence =
+					syncpt->end;
+			++syncpt;
+			break;
+		case DRM_TEGRA_POST_FENCE_SYNC_FENCE_PACK: {
+#ifdef CONFIG_SYNC
+			struct host1x_syncpt *spt;
+			struct host1x_sync_pt *pt;
+			struct sync_fence *fence;
+			int fd;
+			struct drm_tegra_post_fence *pre_pf =
+					post_fences + (i-1);
+
+			if (pre_pf->type !=
+				DRM_TEGRA_POST_FENCE_HOST1X_SYNCPOINT_USER_INCR)
+			{
+				// TODO better error handling
+				post_fence->fence_fd = 0;
+				break;
+			}
+
+			spt = host1x_syncpt_get(host,
+				pre_pf->host1x_syncpoint_user_incr.syncpt.id);
+			pt = host1x_sync_pt_create(host, spt,
+				pre_pf->host1x_syncpoint_user_incr.fence);
+
+			fence = sync_fence_create("tegradrm",
+						  (struct sync_pt *)pt);
+			fd = get_unused_fd_flags(O_CLOEXEC);
+
+			sync_fence_install(fence, fd);
+
+			post_fence->fence_fd = fd;
+			break;
+#endif
+		}
+		}
+	}
 
 	host1x_job_put(job);
 	return 0;

@@ -113,19 +113,42 @@ struct drm_tegra_waitchk {
 	__u32 thresh;
 };
 
+#define DRM_TEGRA_PRE_FENCE_HOST1X_SYNCPOINT_USER_WAIT 0
+#define DRM_TEGRA_PRE_FENCE_SYNC_FENCE 1
+
+struct drm_tegra_pre_fence {
+	__u32 type;
+	union {
+		struct drm_tegra_waitchk host1x_syncpoint_user_wait;
+		__u32 fence_fd;
+	};
+};
+
+#define DRM_TEGRA_POST_FENCE_HOST1X_SYNCPOINT_USER_INCR 0
+#define DRM_TEGRA_POST_FENCE_SYNC_FENCE_PACK 1
+
+struct drm_tegra_post_fence {
+	__u32 type;
+	union {
+		struct {
+			struct drm_tegra_syncpt syncpt;
+			__u32 fence;
+		} host1x_syncpoint_user_incr;
+		__u32 fence_fd;
+	};
+};
+
 struct drm_tegra_submit {
 	__u64 context;
-	__u32 num_syncpts;
 	__u32 num_cmdbufs;
 	__u32 num_relocs;
-	__u32 num_waitchks;
-	__u32 waitchk_mask;
 	__u32 timeout;
-	__u64 syncpts;
 	__u64 cmdbufs;
 	__u64 relocs;
-	__u64 waitchks;
-	__u32 fence;		/* Return value */
+	__u32 num_pre_fences;
+	__u64 pre_fences;
+	__u32 num_post_fences;
+	__u64 post_fences;
 
 	__u32 reserved[5];	/* future expansion */
 };
