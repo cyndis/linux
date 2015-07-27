@@ -94,6 +94,15 @@ static inline void serialize(struct host1x_job *job)
 	}
 }
 
+static void channel_push_wait(struct host1x_channel *channel,
+			     u32 id, u32 thresh)
+{
+	host1x_cdma_push(&channel->cdma,
+			 host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+				host1x_uclass_wait_syncpt_r(), 1),
+			 host1x_class_host_wait_syncpt(id, thresh));
+}
+
 static inline void synchronize_syncpt_base(struct host1x_job *job)
 {
 	struct host1x_channel *ch = job->channel;
@@ -235,4 +244,5 @@ static int host1x_channel_init(struct host1x_channel *ch, struct host1x *dev,
 static const struct host1x_channel_ops host1x_channel_ops = {
 	.init = host1x_channel_init,
 	.submit = channel_submit,
+	.push_wait = channel_push_wait
 };
