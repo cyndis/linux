@@ -25,6 +25,7 @@
 #include <linux/sched.h>
 
 #include "intr.h"
+#include "fence.h"
 
 struct host1x;
 
@@ -49,6 +50,9 @@ struct host1x_syncpt {
 
 	/* interrupt data */
 	struct host1x_syncpt_intr intr;
+
+	/* sync timeline data */
+	struct host1x_sync_timeline *timeline;
 };
 
 /* Initialize sync point array  */

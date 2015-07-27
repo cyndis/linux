@@ -78,6 +78,12 @@ static struct host1x_syncpt *host1x_syncpt_alloc(struct host1x *host,
 	if (!name)
 		return NULL;
 
+	sp->timeline = host1x_sync_timeline_create(host, sp);
+	if (!sp->timeline) {
+		kfree(name);
+		return NULL;
+	}
+
 	sp->dev = dev;
 	sp->name = name;
 
@@ -462,6 +468,7 @@ void host1x_syncpt_free(struct host1x_syncpt *sp)
 
 	host1x_syncpt_base_free(sp->base);
 	kfree(sp->name);
+	host1x_sync_timeline_destroy(sp->timeline);
 	sp->base = NULL;
 	sp->dev = NULL;
 	sp->name = NULL;
