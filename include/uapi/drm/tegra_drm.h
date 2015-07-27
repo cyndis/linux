@@ -81,11 +81,6 @@ struct drm_tegra_get_syncpt_base {
 	__u32 id;
 };
 
-struct drm_tegra_syncpt {
-	__u32 id;
-	__u32 incrs;
-};
-
 struct drm_tegra_cmdbuf {
 	__u32 handle;
 	__u32 offset;
@@ -106,26 +101,38 @@ struct drm_tegra_reloc {
 	__u32 pad;
 };
 
-struct drm_tegra_waitchk {
-	__u32 handle;
+struct drm_tegra_submit_syncpt_incr {
+	__u32 syncpt;
+	__u32 incrs;
+};
+
+struct drm_tegra_submit_syncpt_wait {
+	__u32 handle; /* If left zero, host1x will create wait */
 	__u32 offset;
 	__u32 syncpt;
 	__u32 thresh;
 };
 
+#define DRM_TEGRA_SUBMIT_CREATE_POST_FENCE (1 << 0)
+
 struct drm_tegra_submit {
 	__u64 context;
-	__u32 num_syncpts;
 	__u32 num_cmdbufs;
 	__u32 num_relocs;
-	__u32 num_waitchks;
-	__u32 waitchk_mask;
 	__u32 timeout;
-	__u64 syncpts;
 	__u64 cmdbufs;
 	__u64 relocs;
-	__u64 waitchks;
-	__u32 fence;		/* Return value */
+
+	__u32 flags;
+
+	__u32 num_syncpt_waits;
+	__u64 syncpt_waits;
+	__u32 num_syncpt_incrs;
+	__u64 syncpt_incrs;
+	__u64 syncpt_incr_ends;
+
+	__u32 pre_fence;
+	__u32 post_fence;
 
 	__u32 reserved[5];	/* future expansion */
 };
