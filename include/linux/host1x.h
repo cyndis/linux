@@ -320,4 +320,28 @@ struct tegra_mipi_device *tegra_mipi_request(struct device *device);
 void tegra_mipi_free(struct tegra_mipi_device *device);
 int tegra_mipi_calibrate(struct tegra_mipi_device *device);
 
+struct host1x_sync_pt;
+struct sync_pt;
+struct sync_fence;
+/*
+ * Creates a new sync framework syncpoint based on host1x syncpoint id and
+ * threshold.
+ */
+struct host1x_sync_pt *host1x_sync_pt_create(struct host1x *host,
+				      struct host1x_syncpt *syncpt,
+				      u32 threshold);
+/*
+ * Extracts host1x syncpoint and threshold from a sync framework syncpoint.
+ * If `pt` is not a sync framework syncpoint created using
+ * host1x_sync_pt_create, returns false. Otherwise, returns true and fills
+ * output parameters `syncpt` and `threshold`.
+ */
+bool host1x_sync_pt_extract(struct sync_pt *pt, struct host1x_syncpt **syncpt,
+			    u32 *threshold);
+
+int host1x_sync_fence_count_waits(struct sync_fence *fence);
+
+void host1x_sync_fence_unpack_waits(struct sync_fence *fence,
+				    struct host1x_waitchk *waitchk);
+
 #endif
