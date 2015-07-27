@@ -43,6 +43,12 @@ enum host1x_intr_action {
 	 */
 	HOST1X_INTR_ACTION_WAKEUP_INTERRUPTIBLE,
 
+	/*
+	 * Signal a sync framework timeline.
+	 * 'data' points to a host1x_sync_timeline
+	 */
+	HOST1X_INTR_ACTION_SIGNAL_TIMELINE,
+
 	HOST1X_INTR_ACTION_COUNT
 };
 
