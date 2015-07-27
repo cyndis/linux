@@ -106,6 +106,15 @@ u32 host1x_syncpt_load(struct host1x_syncpt *sp);
 /* Check if the given syncpoint value has already passed */
 bool host1x_syncpt_is_expired(struct host1x_syncpt *sp, u32 thresh);
 
+/*
+ * Check if syncpoint value thresh_a or thresh_b will be triggered earlier.
+ * Returns -1 if thresh_a will be triggered before thresh_b,
+ *          0 if at the same time, or
+ *          1 if threst_b will be triggered before thresh_a.
+ */
+int host1x_syncpt_compare(struct host1x_syncpt *syncpt, u32 thresh_a,
+			  u32 thresh_b);
+
 /* Save host1x sync point state into shadow registers. */
 void host1x_syncpt_save(struct host1x *host);
 
