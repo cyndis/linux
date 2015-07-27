@@ -272,17 +272,9 @@ done:
 }
 EXPORT_SYMBOL(host1x_syncpt_wait);
 
-/*
- * Returns true if syncpoint is expired, false if we may need to wait
- */
-bool host1x_syncpt_is_expired(struct host1x_syncpt *sp, u32 thresh)
+static bool syncpt_is_expired(struct host1x_syncpt *sp, u32 current_val,
+			      u32 future_val, u32 thresh)
 {
-	u32 current_val;
-	u32 future_val;
-	smp_rmb();
-	current_val = (u32)atomic_read(&sp->min_val);
-	future_val = (u32)atomic_read(&sp->max_val);
-
 	/* Note the use of unsigned arithmetic here (mod 1<<32).
 	 *
 	 * c = current_val = min_val	= the current value of the syncpoint.
@@ -329,6 +321,87 @@ bool host1x_syncpt_is_expired(struct host1x_syncpt *sp, u32 thresh)
 		return future_val - thresh >= current_val - thresh;
 	else
 		return (s32)(current_val - thresh) >= 0;
+}
+
+/*
+ * Returns true if syncpoint is expired, false if we may need to wait
+ */
+bool host1x_syncpt_is_expired(struct host1x_syncpt *sp, u32 thresh)
+{
+	u32 current_val, future_val;
+
+	smp_rmb();
+	current_val = (u32)atomic_read(&sp->min_val);
+	future_val = (u32)atomic_read(&sp->max_val);
+
+	return syncpt_is_expired(sp, current_val, future_val, thresh);
+}
+
+int host1x_syncpt_compare(struct host1x_syncpt *syncpt, u32 thresh_a,
+			  u32 thresh_b)
+{
+	u32 current_val, future_val;
+	bool a_expired, b_expired;
+
+	if (thresh_a == thresh_b)
+		return 0;
+
+	smp_rmb();
+	current_val = (u32)atomic_read(&syncpt->min_val);
+	future_val = (u32)atomic_read(&syncpt->max_val);
+
+	a_expired = syncpt_is_expired(syncpt, current_val, future_val,
+				      thresh_a);
+	b_expired = syncpt_is_expired(syncpt, current_val, future_val,
+				      thresh_b);
+
+	if (a_expired && !b_expired) {
+		/* Only A is expired so it must be earlier */
+		return -1;
+	} else if (!a_expired && b_expired) {
+		/* Likewise, B must be earlier */
+		return 1;
+	} else {
+		/*
+		 * Both a and b are expired (trigger before current_val) or not
+		 * expired (trigger after current_val), so we can use
+		 * current_val as a reference value.
+		 *
+		 * We normalize both a and b by subtracting ref from them.
+		 * Denote the normalized values by a_n and b_n. Note that
+		 * because of wrapping, a_n and/or b_n may be negative.
+		 *
+		 * The normalized values a_n and b_n satisfy:
+		 * - a positive value triggers before a negative value
+		 * - a smaller positive value triggers before a greater
+		 *   positive value
+		 * - a smaller negative value (greater in absolute value)
+		 *   triggers before a greater negative value (smaller in
+		 *   absolute value).
+		 *
+		 * Thus we can just stick to unsigned arithmetic and compare
+		 * (u32)a_n to (u32)b_n.
+		 *
+		 * Just to reiterate the possible cases:
+		 *
+		 *	1A) ...ref..a....b....
+		 *	1B) ...ref..b....a....
+		 *	2A) ...b....ref..a....              b_n < 0
+		 *	2B) ...a....ref..b....     a_n > 0
+		 *	3A) ...a....b....ref..     a_n < 0, b_n < 0
+		 *	3A) ...b....a....ref..     a_n < 0, b_n < 0
+		 */
+
+		u32 a_n = thresh_a - current_val;
+		u32 b_n = thresh_b - current_val;
+
+		if (a_n < b_n)
+			return -1;
+		else if (a_n > b_n)
+			return 1;
+		else
+			return 0;
+	}
 }
 
 /* remove a wait pointed to by patch_addr */
