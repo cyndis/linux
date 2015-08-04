@@ -583,8 +583,10 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 
 	/* pin memory */
 	err = pin_job(job);
-	if (!err)
+	if (!err) {
+		err = -EINVAL;
 		goto out;
+	}
 
 	/* patch gathers */
 	for (i = 0; i < job->num_gathers; i++) {
