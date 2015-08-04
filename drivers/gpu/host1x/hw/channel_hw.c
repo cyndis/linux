@@ -94,6 +94,26 @@ static inline void serialize(struct host1x_job *job)
 	}
 }
 
+static inline void insert_pre_fences(struct host1x_job *job)
+{
+	struct host1x_channel *ch = job->channel;
+	int i;
+
+	for (i = 0; i < job->num_waitchk; ++i) {
+		struct host1x_waitchk *waitchk = &job->waitchk[i];
+
+		/* If bo is set, the command buffer already includes the wait */
+		if (waitchk->bo)
+			continue;
+
+		host1x_cdma_push(&ch->cdma,
+			host1x_opcode_setclass(HOST1X_CLASS_HOST1X,
+				host1x_uclass_wait_syncpt_r(), 1),
+			host1x_class_host_wait_syncpt(
+				waitchk->syncpt_id, waitchk->thresh));
+	}
+}
+
 static inline void synchronize_syncpt_base(struct host1x_job *job)
 {
 	struct host1x_channel *ch = job->channel;
@@ -163,6 +183,8 @@ static int channel_submit(struct host1x_job *job)
 		mutex_unlock(&ch->submitlock);
 		goto error;
 	}
+
+	insert_pre_fences(job);
 
 	if (job->serialize)
 		serialize(job);
