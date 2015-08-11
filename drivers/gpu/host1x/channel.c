@@ -80,7 +80,8 @@ void host1x_channel_put(struct host1x_channel *channel)
 }
 EXPORT_SYMBOL(host1x_channel_put);
 
-struct host1x_channel *host1x_channel_request(struct device *dev)
+struct host1x_channel *host1x_channel_request(
+	struct device *dev, const struct host1x_channel_client_ops *ops)
 {
 	struct host1x *host = dev_get_drvdata(dev->parent);
 	int max_channels = host->info->nb_channels;
@@ -103,6 +104,8 @@ struct host1x_channel *host1x_channel_request(struct device *dev)
 
 	/* Link device to host1x_channel */
 	channel->dev = dev;
+
+	channel->ops = ops;
 
 	/* Add to channel list */
 	list_add_tail(&channel->list, &host->chlist.list);

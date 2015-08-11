@@ -35,6 +35,7 @@ struct host1x_channel {
 	void __iomem *regs;
 	struct device *dev;
 	struct host1x_cdma cdma;
+	struct host1x_channel_client_ops *ops;
 };
 
 /* channel list operations */

@@ -155,7 +155,13 @@ u32 host1x_syncpt_base_id(struct host1x_syncpt_base *base);
 struct host1x_channel;
 struct host1x_job;
 
-struct host1x_channel *host1x_channel_request(struct device *dev);
+struct host1x_channel_client_ops {
+	int (*set_clock_rate)(struct device *, struct host1x_channel *,
+			      unsigned long);
+};
+
+struct host1x_channel *host1x_channel_request(
+	struct device *dev, const struct host1x_channel_client_ops *);
 void host1x_channel_free(struct host1x_channel *channel);
 struct host1x_channel *host1x_channel_get(struct host1x_channel *channel);
 void host1x_channel_put(struct host1x_channel *channel);
@@ -246,6 +252,9 @@ struct host1x_job {
 
 	/* Add a channel wait for previous ops to complete */
 	bool serialize;
+
+	/* Minimum clock rate for client during job execution */
+	unsigned long min_clk_rate;
 };
 
 struct host1x_job *host1x_job_alloc(struct host1x_channel *ch,

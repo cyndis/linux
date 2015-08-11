@@ -217,6 +217,30 @@ static void stop_cdma_timer_locked(struct host1x_cdma *cdma)
 	cdma->timeout.client = 0;
 }
 
+static int update_channel_rate(struct host1x_cdma *cdma)
+{
+	struct host1x_channel *ch = cdma_to_channel(cdma);
+	struct host1x_job *job;
+	int err = 0;
+
+	unsigned long rate = 0;
+
+	list_for_each_entry(job, &cdma->sync_queue, list) {
+		if (job->min_clk_rate > rate)
+			rate = job->min_clk_rate;
+	}
+
+	pr_warn("%s: setting channel rate to %lu\n", __func__, rate);
+
+	if (ch->ops && ch->ops->set_clock_rate) {
+		err = ch->ops->set_clock_rate(ch->dev, ch, rate);
+		if (err)
+			pr_warn("%s: failed, errno=%d\n", __func__, err);
+	}
+
+	return err;
+}
+
 /*
  * For all sync queue entries that have already finished according to the
  * current sync point registers:
@@ -277,6 +301,8 @@ static void update_cdma_locked(struct host1x_cdma *cdma)
 		host1x_job_put(job);
 	}
 done:
+	pr_warn("jobs done, updating channel rate\n");
+	update_channel_rate(cdma);
 
 	if (cdma->event == CDMA_EVENT_SYNC_QUEUE_EMPTY &&
 	    list_empty(&cdma->sync_queue))
@@ -443,6 +469,12 @@ int host1x_cdma_begin(struct host1x_cdma *cdma, struct host1x_job *job)
 
 	mutex_lock(&cdma->lock);
 
+	host1x_job_get(job);
+	list_add_tail(&job->list, &cdma->sync_queue);
+
+	pr_warn("new job, updating channel rate\n");
+	update_channel_rate(cdma);
+
 	if (job->timeout) {
 		/* init state on first submit with timeout value */
 		if (!cdma->timeout.initialized) {
@@ -505,8 +537,6 @@ void host1x_cdma_end(struct host1x_cdma *cdma,
 
 	job->first_get = cdma->first_get;
 	job->num_slots = cdma->slots_used;
-	host1x_job_get(job);
-	list_add_tail(&job->list, &cdma->sync_queue);
 
 	/* start timer on idle -> active transitions */
 	if (job->timeout && idle)

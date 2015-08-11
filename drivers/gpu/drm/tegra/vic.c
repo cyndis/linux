@@ -161,6 +161,18 @@ static const struct falcon_ops vic_falcon_ops = {
 	.free = vic_falcon_free
 };
 
+static int vic_channel_set_rate(struct device *dev, struct host1x_channel *ch,
+				unsigned long rate)
+{
+	struct vic *vic = dev_get_drvdata(dev);
+
+	return clk_set_rate(vic->clk, rate);
+}
+
+static const struct host1x_channel_client_ops vic_channel_ops = {
+	.set_clock_rate = vic_channel_set_rate
+};
+
 static int vic_init(struct host1x_client *client)
 {
 	struct tegra_drm_client *drm = host1x_to_drm_client(client);
@@ -188,7 +200,7 @@ static int vic_init(struct host1x_client *client)
 	if (err < 0)
 		goto detach_device;
 
-	vic->channel = host1x_channel_request(client->dev);
+	vic->channel = host1x_channel_request(client->dev, &vic_channel_ops);
 	if (!vic->channel) {
 		err = -ENOMEM;
 		goto exit_falcon;
