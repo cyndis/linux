@@ -229,15 +229,21 @@ static unsigned int pin_job(struct host1x_job *job)
 		 */
 		// FIXME the above note is not necessarily true when sgt->nents > 1.
 		if (!IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL) && host->domain) {
-			phys_addr = page_to_phys(sg_page(&sgt->sgl[0])) +
-					sgt->sgl[0].offset;
+			phys_addr = host1x_iova_alloc(host, g->words * 4);
+			if (!phys_addr)
+				goto unpin;
 			map_sz = iommu_map_sg(host->domain, phys_addr, sgt->sgl,
 					      sgt->nents,
 					      IOMMU_READ | IOMMU_WRITE);
-			if (!map_sz)
+			if (!map_sz) {
+				host1x_iova_free(host, g->words * 4, phys_addr);
 				goto unpin;
+			}
+
+			pr_warn("mapped host gather to %p\n", phys_addr);
 
 			job->unpins[job->num_unpins].map_sz = map_sz;
+			job->unpins[job->num_unpins].iova_sz = g->words * 4;
 		}
 
 		job->addr_phys[job->num_unpins] = phys_addr;
@@ -636,9 +642,14 @@ void host1x_job_unpin(struct host1x_job *job)
 
 	for (i = 0; i < job->num_unpins; i++) {
 		struct host1x_job_unpin_data *unpin = &job->unpins[i];
-		if (!IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL) && host->domain)
+		if (unpin->map_sz)
 			iommu_unmap(host->domain, job->addr_phys[i],
 				    unpin->map_sz);
+		if (unpin->iova_sz) {
+			host1x_iova_free(host, unpin->iova_sz,
+					 job->addr_phys[i]);
+			pr_warn("freed host iova at %p\n", job->addr_phys[i]);
+		}
 		host1x_bo_unpin(unpin->bo, unpin->sgt);
 		host1x_bo_put(unpin->bo);
 	}

@@ -38,6 +38,7 @@ struct host1x_job_unpin_data {
 	struct host1x_bo *bo;
 	struct sg_table *sgt;
 	size_t map_sz;
+	size_t iova_sz;
 };
 
 /*

@@ -69,6 +69,7 @@ static int host1x_pushbuffer_init(struct push_buffer *pb)
 {
 	struct host1x_cdma *cdma = pb_to_cdma(pb);
 	struct host1x *host1x = cdma_to_host1x(cdma);
+	dma_addr_t iova;
 	int err;
 
 	pb->mapped = NULL;
@@ -89,16 +90,26 @@ static int host1x_pushbuffer_init(struct push_buffer *pb)
 		return -ENOMEM;
 
 	if (host1x->domain) {
-		err = iommu_map(host1x->domain, pb->phys, pb->phys,
+		iova = host1x_iova_alloc(host1x, pb->alloc_size_bytes);
+		if (!iova) {
+			err = -ENOMEM;
+			goto free_mapped;
+		}
+
+		err = iommu_map(host1x->domain, iova, pb->phys,
 				pb->alloc_size_bytes, IOMMU_READ | IOMMU_WRITE);
 		if (err < 0)
-			goto free_mapped;
+			goto free_iova;
+
+		pb->phys = iova;
 	}
 
 	host1x_hw_pushbuffer_init(host1x, pb);
 
 	return 0;
 
+free_iova:
+	host1x_iova_free(host1x, pb->alloc_size_bytes, iova);
 free_mapped:
 	dma_free_writecombine(host1x->dev, pb->alloc_size_bytes, pb->mapped,
 			      pb->phys);

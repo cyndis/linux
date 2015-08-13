@@ -96,6 +96,46 @@ static struct of_device_id host1x_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, host1x_of_match);
 
+dma_addr_t host1x_iova_alloc(struct host1x *host, size_t size)
+{
+	size_t aligned = PAGE_ALIGN(size);
+	int num_pages = aligned >> PAGE_SHIFT;
+	unsigned int start;
+
+	if (WARN_ON(!host->domain))
+		return 0;
+
+	mutex_lock(&host->iova_lock);
+
+	start = bitmap_find_next_zero_area(host->iova_bitmap,
+					   host->iova_bitmap_bits, 0,
+					   num_pages, 0);
+	if (start > host->iova_bitmap_bits) {
+		mutex_unlock(&host->iova_lock);
+		return 0;
+	}
+
+	bitmap_set(host->iova_bitmap, start, num_pages);
+
+	mutex_unlock(&host->iova_lock);
+
+	return 0x1000 + (start << PAGE_SHIFT);
+}
+
+void host1x_iova_free(struct host1x *host, size_t size, dma_addr_t iova)
+{
+	size_t aligned = PAGE_ALIGN(size);
+	int num_pages = aligned >> PAGE_SHIFT;
+	unsigned int start = (iova - 0x1000) >> PAGE_SHIFT;
+
+	if (!host->domain)
+		return;
+
+	mutex_lock(&host->iova_lock);
+	bitmap_clear(host->iova_bitmap, start, num_pages);
+	mutex_unlock(&host->iova_lock);
+}
+
 static int host1x_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *id;
@@ -157,6 +197,16 @@ static int host1x_probe(struct platform_device *pdev)
 	}
 
 	if (iommu_present(&platform_bus_type)) {
+		host->iova_bitmap_bits =
+			BITS_TO_LONGS(0xffffefff >> PAGE_SHIFT) * sizeof(long) *
+			BITS_PER_BYTE;
+		host->iova_bitmap = devm_kzalloc(
+			&pdev->dev, host->iova_bitmap_bits / BITS_PER_BYTE,
+			GFP_KERNEL);
+		if (!host->iova_bitmap)
+			return -ENOMEM;
+		mutex_init(&host->iova_lock);
+
 		host->domain = iommu_domain_alloc(&platform_bus_type);
 		if (!host->domain)
 			return -ENOMEM;

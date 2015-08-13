@@ -134,6 +134,10 @@ struct host1x {
 	struct list_head devices;
 
 	struct list_head list;
+
+	struct mutex iova_lock;
+	unsigned long *iova_bitmap;
+	unsigned int iova_bitmap_bits;
 };
 
 void host1x_sync_writel(struct host1x *host1x, u32 r, u32 v);
@@ -306,5 +310,8 @@ static inline void host1x_hw_show_mlocks(struct host1x *host, struct output *o)
 }
 
 extern struct platform_driver tegra_mipi_driver;
+
+dma_addr_t host1x_iova_alloc(struct host1x *host, size_t size);
+void host1x_iova_free(struct host1x *host, size_t size, dma_addr_t iova);
 
 #endif
