@@ -261,7 +261,7 @@ static int tegra_bo_alloc(struct drm_device *drm, struct tegra_bo *bo)
 		size_t size = bo->gem.size;
 
 		bo->vaddr = dma_alloc_wc(drm->dev, size, &bo->paddr,
-					 GFP_KERNEL | __GFP_NOWARN);
+					 GFP_KERNEL | GFP_DMA | __GFP_NOWARN);
 		if (!bo->vaddr) {
 			dev_err(drm->dev,
 				"failed to allocate buffer of size %zu\n",
