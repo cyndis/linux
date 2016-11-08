@@ -51,9 +51,15 @@ static void host1x_pushbuffer_destroy(struct push_buffer *pb)
 	struct host1x_cdma *cdma = pb_to_cdma(pb);
 	struct host1x *host1x = cdma_to_host1x(cdma);
 
-	if (pb->phys != 0)
-		dma_free_wc(host1x->dev, pb->size_bytes + 4, pb->mapped,
-			    pb->phys);
+	if (!pb->phys)
+		return;
+
+	if (host1x->domain) {
+		iommu_unmap(host1x->domain, pb->dma, pb->alloc_size_bytes);
+		free_iova(&host1x->iova, iova_pfn(&host1x->iova, pb->dma));
+	}
+
+	dma_free_wc(host1x->dev, pb->alloc_size_bytes, pb->mapped, pb->phys);
 
 	pb->mapped = NULL;
 	pb->phys = 0;
@@ -66,28 +72,65 @@ static int host1x_pushbuffer_init(struct push_buffer *pb)
 {
 	struct host1x_cdma *cdma = pb_to_cdma(pb);
 	struct host1x *host1x = cdma_to_host1x(cdma);
+	struct iova *alloc;
+	int err;
 
 	pb->mapped = NULL;
 	pb->phys = 0;
 	pb->size_bytes = HOST1X_PUSHBUFFER_SLOTS * 8;
+	pb->alloc_size_bytes = pb->size_bytes + 4;
 
 	/* initialize buffer pointers */
 	pb->fence = pb->size_bytes - 8;
 	pb->pos = 0;
 
-	/* allocate and map pushbuffer memory */
-	pb->mapped = dma_alloc_wc(host1x->dev, pb->size_bytes + 4, &pb->phys,
-				  GFP_KERNEL);
-	if (!pb->mapped)
-		goto fail;
+	if (host1x->domain) {
+		unsigned long shift;
+
+		pb->alloc_size_bytes = iova_align(&host1x->iova,
+						  pb->alloc_size_bytes);
+
+		pb->mapped = dma_alloc_wc(host1x->dev, pb->alloc_size_bytes,
+					  &pb->phys, GFP_KERNEL);
+		if (!pb->mapped)
+			return -ENOMEM;
+
+		shift = iova_shift(&host1x->iova);
+		alloc = alloc_iova(
+			&host1x->iova, pb->alloc_size_bytes >> shift,
+			host1x->domain->geometry.aperture_end >> shift, true);
+		if (!alloc) {
+			err = -ENOMEM;
+			goto iommu_free_mem;
+		}
+
+		err = iommu_map(host1x->domain,
+				iova_dma_addr(&host1x->iova, alloc),
+				pb->phys, pb->alloc_size_bytes,
+				IOMMU_READ);
+		if (err)
+			goto iommu_free_iova;
+
+		pb->dma = iova_dma_addr(&host1x->iova, alloc);
+	} else {
+		pb->mapped = dma_alloc_wc(host1x->dev, pb->alloc_size_bytes,
+					  &pb->phys, GFP_KERNEL);
+		if (!pb->mapped)
+			return -ENOMEM;
+
+		pb->dma = pb->phys;
+	}
 
 	host1x_hw_pushbuffer_init(host1x, pb);
 
 	return 0;
 
-fail:
-	host1x_pushbuffer_destroy(pb);
-	return -ENOMEM;
+iommu_free_iova:
+	__free_iova(&host1x->iova, alloc);
+iommu_free_mem:
+	dma_free_wc(host1x->dev, pb->alloc_size_bytes, pb->mapped, pb->phys);
+
+	return err;
 }
 
 /*

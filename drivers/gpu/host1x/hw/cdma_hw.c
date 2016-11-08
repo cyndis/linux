@@ -55,7 +55,7 @@ static void cdma_timeout_cpu_incr(struct host1x_cdma *cdma, u32 getptr,
 		*(p++) = HOST1X_OPCODE_NOP;
 		*(p++) = HOST1X_OPCODE_NOP;
 		dev_dbg(host1x->dev, "%s: NOP at %pad+%#x\n", __func__,
-			&pb->phys, getptr);
+			&pb->dma, getptr);
 		getptr = (getptr + 8) & (pb->size_bytes - 1);
 	}
 
@@ -78,9 +78,9 @@ static void cdma_start(struct host1x_cdma *cdma)
 			 HOST1X_CHANNEL_DMACTRL);
 
 	/* set base, put and end pointer */
-	host1x_ch_writel(ch, cdma->push_buffer.phys, HOST1X_CHANNEL_DMASTART);
+	host1x_ch_writel(ch, cdma->push_buffer.dma, HOST1X_CHANNEL_DMASTART);
 	host1x_ch_writel(ch, cdma->push_buffer.pos, HOST1X_CHANNEL_DMAPUT);
-	host1x_ch_writel(ch, cdma->push_buffer.phys +
+	host1x_ch_writel(ch, cdma->push_buffer.dma +
 			 cdma->push_buffer.size_bytes + 4,
 			 HOST1X_CHANNEL_DMAEND);
 
@@ -115,8 +115,8 @@ static void cdma_timeout_restart(struct host1x_cdma *cdma, u32 getptr)
 			 HOST1X_CHANNEL_DMACTRL);
 
 	/* set base, end pointer (all of memory) */
-	host1x_ch_writel(ch, cdma->push_buffer.phys, HOST1X_CHANNEL_DMASTART);
-	host1x_ch_writel(ch, cdma->push_buffer.phys +
+	host1x_ch_writel(ch, cdma->push_buffer.dma, HOST1X_CHANNEL_DMASTART);
+	host1x_ch_writel(ch, cdma->push_buffer.dma +
 			 cdma->push_buffer.size_bytes,
 			 HOST1X_CHANNEL_DMAEND);
 
