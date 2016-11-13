@@ -1,7 +1,7 @@
 /*
  * Tegra host1x Job
  *
- * Copyright (c) 2010-2015, NVIDIA Corporation.
+ * Copyright (C) 2010-2016 NVIDIA CORPORATION.  All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms and conditions of the GNU General Public License,
@@ -105,6 +105,7 @@ void host1x_job_add_gather(struct host1x_job *job, struct host1x_bo *bo,
 	cur_gather->words = words;
 	cur_gather->bo = bo;
 	cur_gather->offset = offset;
+
 	job->num_gathers++;
 }
 EXPORT_SYMBOL(host1x_job_add_gather);
