@@ -10,6 +10,7 @@
 #include <linux/bitops.h>
 #include <linux/host1x.h>
 #include <linux/iommu.h>
+#include <linux/sync_file.h>
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
@@ -344,6 +345,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		     struct drm_tegra_submit *args, struct drm_device *drm,
 		     struct drm_file *file)
 {
+	struct host1x *host1x = dev_get_drvdata(drm->dev->parent);
 	unsigned int num_cmdbufs = args->num_cmdbufs;
 	unsigned int num_relocs = args->num_relocs;
 	unsigned int num_waitchks = args->num_waitchks;
@@ -355,10 +357,16 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		(void __user *)(uintptr_t)args->waitchks;
 	struct drm_tegra_syncpt syncpt;
 	struct host1x_job *job;
-	int err;
+	int err, i;
+	bool found;
 
 	/* We don't yet support other than one syncpt_incr struct per submit */
 	if (args->num_syncpts != 1)
+		return -EINVAL;
+
+	/* Check for unrecognized flags */
+	if (args->flags & ~(DRM_TEGRA_SUBMIT_WAIT_FENCE_FD |
+	                    DRM_TEGRA_SUBMIT_CREATE_FENCE_FD))
 		return -EINVAL;
 
 	job = host1x_job_alloc(context->channel, args->num_cmdbufs,
@@ -372,19 +380,27 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	job->class = context->client->base.class;
 	job->serialize = true;
 
+	if (args->flags & DRM_TEGRA_SUBMIT_WAIT_FENCE_FD) {
+		job->prefence = sync_file_get_fence(args->fence);
+		if (!job->prefence) {
+			err = -ENOENT;
+			goto put_job;
+		}
+	}
+
 	while (num_cmdbufs) {
 		struct drm_tegra_cmdbuf cmdbuf;
 		struct host1x_bo *bo;
 
 		if (copy_from_user(&cmdbuf, cmdbufs, sizeof(cmdbuf))) {
 			err = -EFAULT;
-			goto fail;
+			goto put_fence;
 		}
 
 		bo = host1x_bo_lookup(file, cmdbuf.handle);
 		if (!bo) {
 			err = -ENOENT;
-			goto fail;
+			goto put_fence;
 		}
 
 		host1x_job_add_gather(job, bo, cmdbuf.words, cmdbuf.offset);
@@ -398,19 +414,19 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 						  &relocs[num_relocs], drm,
 						  file);
 		if (err < 0)
-			goto fail;
+			goto put_fence;
 	}
 
 	if (copy_from_user(job->waitchk, waitchks,
 			   sizeof(*waitchks) * num_waitchks)) {
 		err = -EFAULT;
-		goto fail;
+		goto put_fence;
 	}
 
 	if (copy_from_user(&syncpt, (void __user *)(uintptr_t)args->syncpts,
 			   sizeof(syncpt))) {
 		err = -EFAULT;
-		goto fail;
+		goto put_fence;
 	}
 
 	job->is_addr_reg = context->client->ops->is_addr_reg;
@@ -423,20 +439,54 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 
 	err = host1x_job_pin(job, context->client->base.dev);
 	if (err)
-		goto fail;
+		goto put_fence;
 
 	err = host1x_job_submit(job);
 	if (err)
-		goto fail_submit;
+		goto unpin_job;
 
-	args->fence = job->syncpt_end;
+	if (args->flags & DRM_TEGRA_SUBMIT_CREATE_FENCE_FD) {
+		struct dma_fence *fence;
+		struct sync_file *file;
 
+		fence = host1x_fence_create(
+			host1x, host1x_syncpt_get(host1x, job->syncpt_id),
+			job->syncpt_end);
+		if (!fence) {
+			err = -ENOMEM;
+			goto put_fence;
+		}
+
+		file = sync_file_create(fence);
+		if (!file) {
+			dma_fence_put(fence);
+			err = -ENOMEM;
+			goto put_fence;
+		}
+
+		err = get_unused_fd_flags(O_CLOEXEC);
+		if (err < 0) {
+			dma_fence_put(fence);
+			goto put_fence;
+		}
+
+		fd_install(err, file->file);
+		args->fence = err;
+	} else {
+		args->fence = job->syncpt_end;
+	}
+
+	if (job->prefence)
+		dma_fence_put(job->prefence);
 	host1x_job_put(job);
 	return 0;
 
-fail_submit:
+unpin_job:
 	host1x_job_unpin(job);
-fail:
+put_fence:
+	if (job->prefence)
+		dma_fence_put(job->prefence);
+put_job:
 	host1x_job_put(job);
 	return err;
 }
