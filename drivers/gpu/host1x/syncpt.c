@@ -484,10 +484,10 @@ unsigned int host1x_syncpt_nb_mlocks(struct host1x *host)
 
 struct host1x_syncpt *host1x_syncpt_get(struct host1x *host, unsigned int id)
 {
-	if (host->info->nb_pts < id)
+	if (id < host->info->nb_pts)
+		return host->syncpt + id;
+	else
 		return NULL;
-
-	return host->syncpt + id;
 }
 EXPORT_SYMBOL(host1x_syncpt_get);
 
