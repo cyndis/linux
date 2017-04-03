@@ -190,10 +190,10 @@ static int gpio_mockup_irqchip_setup(struct device *dev,
 		return irq_base;
 
 	gc->irq_base = irq_base;
-	gc->irqchip = &gpio_mockup_irqchip;
+	gc->irq.chip = &gpio_mockup_irqchip;
 
 	for (i = 0; i < gc->ngpio; i++) {
-		irq_set_chip(irq_base + i, gc->irqchip);
+		irq_set_chip(irq_base + i, gc->irq.chip);
 		irq_set_chip_data(irq_base + i, gc);
 		irq_set_handler(irq_base + i, &handle_simple_irq);
 		irq_modify_status(irq_base + i,
