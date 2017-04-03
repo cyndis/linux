@@ -72,6 +72,7 @@ static LIST_HEAD(gpio_lookup_list);
 LIST_HEAD(gpio_devices);
 
 static void gpiochip_free_hogs(struct gpio_chip *chip);
+static int gpiochip_add_irqchip(struct gpio_chip *gpiochip);
 static void gpiochip_irqchip_remove(struct gpio_chip *gpiochip);
 static int gpiochip_irqchip_init_valid_mask(struct gpio_chip *gpiochip);
 static void gpiochip_irqchip_free_valid_mask(struct gpio_chip *gpiochip);
@@ -1241,6 +1242,10 @@ int gpiochip_add_data(struct gpio_chip *chip, void *data)
 	if (status)
 		goto err_remove_from_list;
 
+	status = gpiochip_add_irqchip(chip);
+	if (status)
+		goto err_remove_chip;
+
 	status = of_gpiochip_add(chip);
 	if (status)
 		goto err_remove_chip;
@@ -1600,10 +1605,16 @@ EXPORT_SYMBOL_GPL(gpiochip_set_nested_irqchip);
  * gpiochip by assigning the gpiochip as chip data, and using the irqchip
  * stored inside the gpiochip.
  */
-static int gpiochip_irq_map(struct irq_domain *d, unsigned int irq,
-			    irq_hw_number_t hwirq)
+int gpiochip_irq_map(struct irq_domain *d, unsigned int irq,
+		     irq_hw_number_t hwirq)
 {
 	struct gpio_chip *chip = d->host_data;
+	struct irq_chip *irqchip;
+
+	if (chip->irq.chip)
+		irqchip = chip->irq.chip;
+	else
+		irqchip = chip->irqchip;
 
 	irq_set_chip_data(irq, chip);
 	/*
@@ -1611,7 +1622,7 @@ static int gpiochip_irq_map(struct irq_domain *d, unsigned int irq,
 	 * category than their parents, so it won't report false recursion.
 	 */
 	irq_set_lockdep_class(irq, chip->lock_key);
-	irq_set_chip_and_handler(irq, chip->irqchip, chip->irq_handler);
+	irq_set_chip_and_handler(irq, irqchip, chip->irq_handler);
 	/* Chips that use nested thread handlers have them marked */
 	if (chip->irq_nested)
 		irq_set_nested_thread(irq, 1);
@@ -1626,8 +1637,9 @@ static int gpiochip_irq_map(struct irq_domain *d, unsigned int irq,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(gpiochip_irq_map);
 
-static void gpiochip_irq_unmap(struct irq_domain *d, unsigned int irq)
+void gpiochip_irq_unmap(struct irq_domain *d, unsigned int irq)
 {
 	struct gpio_chip *chip = d->host_data;
 
@@ -1636,6 +1648,7 @@ static void gpiochip_irq_unmap(struct irq_domain *d, unsigned int irq)
 	irq_set_chip_and_handler(irq, NULL, NULL);
 	irq_set_chip_data(irq, NULL);
 }
+EXPORT_SYMBOL_GPL(gpiochip_irq_unmap);
 
 static const struct irq_domain_ops gpiochip_domain_ops = {
 	.map	= gpiochip_irq_map,
@@ -1675,6 +1688,127 @@ static int gpiochip_to_irq(struct gpio_chip *chip, unsigned offset)
 }
 
 /**
+ * gpiochip_add_irqchip() - adds an IRQ chip to a GPIO chip
+ * @gpiochip: the GPIO chip to add the IRQ chip to
+ */
+static int gpiochip_add_irqchip(struct gpio_chip *gpiochip)
+{
+	struct irq_chip *irqchip = gpiochip->irq.chip;
+	const struct irq_domain_ops *ops;
+	struct device_node *np;
+	unsigned int type;
+	unsigned int i;
+
+	if (!irqchip)
+		return 0;
+
+	if (gpiochip->irq.parent_handler && gpiochip->can_sleep) {
+		chip_err(gpiochip, "you cannot have chained interrupts on a "
+			 "chip that may sleep\n");
+		return -EINVAL;
+	}
+
+	type = gpiochip->irq.default_type;
+	np = gpiochip->parent->of_node;
+
+#ifdef CONFIG_OF_GPIO
+	/*
+	 * If the gpiochip has an assigned OF node this takes precedence
+	 * FIXME: get rid of this and use gpiochip->parent->of_node
+	 * everywhere
+	 */
+	if (gpiochip->of_node)
+		np = gpiochip->of_node;
+#endif
+
+	/*
+	 * Specifying a default trigger is a terrible idea if DT or ACPI is
+	 * used to configure the interrupts, as you may end up with
+	 * conflicting triggers. Tell the user, and reset to NONE.
+	 */
+	if (WARN(np && type != IRQ_TYPE_NONE,
+		 "%s: Ignoring %u default trigger\n", np->full_name, type))
+		type = IRQ_TYPE_NONE;
+
+	if (has_acpi_companion(gpiochip->parent) && type != IRQ_TYPE_NONE) {
+		acpi_handle_warn(ACPI_HANDLE(gpiochip->parent),
+				 "Ignoring %u default trigger\n", type);
+		type = IRQ_TYPE_NONE;
+	}
+
+	gpiochip->irq_handler = gpiochip->irq.handler;
+	gpiochip->lock_key = gpiochip->irq.lock_key;
+
+	gpiochip->to_irq = gpiochip_to_irq;
+	gpiochip->irq_default_type = type;
+
+	if (gpiochip->irq.domain_ops)
+		ops = gpiochip->irq.domain_ops;
+	else
+		ops = &gpiochip_domain_ops;
+
+	gpiochip->irqdomain = irq_domain_add_simple(np, gpiochip->ngpio,
+						    gpiochip->irq.first,
+						    ops, gpiochip);
+	if (!gpiochip->irqdomain)
+		return -EINVAL;
+
+	/*
+	 * It is possible for a driver to override this, but only if the
+	 * alternative functions are both implemented.
+	 */
+	if (!irqchip->irq_request_resources &&
+	    !irqchip->irq_release_resources) {
+		irqchip->irq_request_resources = gpiochip_irq_reqres;
+		irqchip->irq_release_resources = gpiochip_irq_relres;
+	}
+
+	if (gpiochip->irq.parent_handler) {
+		void *data = gpiochip->irq.parent_handler_data ?: gpiochip;
+
+		for (i = 0; i < gpiochip->irq.num_parents; i++) {
+			/*
+			 * The parent IRQ chip is already using the chip_data
+			 * for this IRQ chip, so our callbacks simply use the
+			 * handler_data.
+			 */
+			irq_set_chained_handler_and_data(gpiochip->irq.parents[i],
+							 gpiochip->irq.parent_handler,
+							 data);
+		}
+
+		gpiochip->irq_nested = false;
+	} else {
+		gpiochip->irq_nested = true;
+	}
+
+	/*
+	 * Prepare the mapping since the IRQ chip shall be orthogonal to any
+	 * GPIO chip calls.
+	 */
+	for (i = 0; i < gpiochip->ngpio; i++) {
+		unsigned int irq;
+
+		if (!gpiochip_irqchip_irq_valid(gpiochip, i))
+			continue;
+
+		irq = irq_create_mapping(gpiochip->irqdomain, i);
+		if (!irq) {
+			chip_err(gpiochip,
+				 "failed to create IRQ mapping for GPIO#%u\n",
+				 i);
+			continue;
+		}
+
+		irq_set_parent(irq, gpiochip->irq.map[i]);
+	}
+
+	acpi_gpiochip_request_interrupts(gpiochip);
+
+	return 0;
+}
+
+/**
  * gpiochip_irqchip_remove() - removes an irqchip added to a gpiochip
  * @gpiochip: the gpiochip to remove the irqchip from
  *
@@ -1689,6 +1823,16 @@ static void gpiochip_irqchip_remove(struct gpio_chip *gpiochip)
 	if (gpiochip->irq_chained_parent) {
 		irq_set_chained_handler(gpiochip->irq_chained_parent, NULL);
 		irq_set_handler_data(gpiochip->irq_chained_parent, NULL);
+	}
+
+	if (gpiochip->irq.chip) {
+		struct gpio_irq_chip *irq = &gpiochip->irq;
+		unsigned int i;
+
+		for (i = 0; i < irq->num_parents; i++) {
+			irq_set_chained_handler(irq->parents[i], NULL);
+			irq_set_handler_data(irq->parents[i], NULL);
+		}
 	}
 
 	/* Remove all IRQ mappings and delete the domain */
@@ -1832,6 +1976,11 @@ int gpiochip_irqchip_add_key(struct gpio_chip *gpiochip,
 EXPORT_SYMBOL_GPL(gpiochip_irqchip_add_key);
 
 #else /* CONFIG_GPIOLIB_IRQCHIP */
+
+static inline int gpiochip_add_irqchip(struct gpio_chip *gpiochip)
+{
+	return 0;
+}
 
 static void gpiochip_irqchip_remove(struct gpio_chip *gpiochip) {}
 static inline int gpiochip_irqchip_init_valid_mask(struct gpio_chip *gpiochip)

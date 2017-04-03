@@ -19,6 +19,39 @@ struct module;
 
 #ifdef CONFIG_GPIOLIB
 
+#ifdef CONFIG_GPIOLIB_IRQCHIP
+/**
+ * struct gpio_irq_chip - GPIO interrupt controller
+ * @chip: GPIO IRQ chip implementation, provided by GPIO driver
+ * @first: if not dynamically assigned, the base (first) IRQ to allocate GPIO
+ *         chip IRQs from
+ * @domain_ops: table of interrupt domain operations for this IRQ chip
+ * @handler: the interrupt handler for the GPIO chip's parent interrupts
+ * @lock_key: per GPIO IRQ chip lockdep class
+ * @default_type: default IRQ triggering type applied during GPIO driver
+ *                initialization, provided by GPIO driver
+ * @parent_handler: the interrupt handler for the GPIO chip's parent
+ *                  interrupts, may be NULL if the parent interrupts are
+ *                  nested rather than cascaded
+ * @num_parents: the number of interrupt parents of a GPIO chip
+ * @parents: a list of interrupt parents of a GPIO chip
+ * @map: a list of interrupt parents for each line of a GPIO chip
+ */
+struct gpio_irq_chip {
+	struct irq_chip *chip;
+	unsigned int first;
+	const struct irq_domain_ops *domain_ops;
+	irq_flow_handler_t handler;
+	struct lock_class_key *lock_key;
+	unsigned int default_type;
+	irq_flow_handler_t parent_handler;
+	void *parent_handler_data;
+	unsigned int num_parents;
+	unsigned int *parents;
+	unsigned int *map;
+};
+#endif
+
 /**
  * struct gpio_chip - abstract a GPIO controller
  * @label: a functional name for the GPIO device, such as a part
@@ -173,6 +206,8 @@ struct gpio_chip {
 	bool			irq_need_valid_mask;
 	unsigned long		*irq_valid_mask;
 	struct lock_class_key	*lock_key;
+
+	struct gpio_irq_chip	irq;
 #endif
 
 #if defined(CONFIG_OF_GPIO)
@@ -244,6 +279,10 @@ int bgpio_init(struct gpio_chip *gc, struct device *dev,
 #endif
 
 #ifdef CONFIG_GPIOLIB_IRQCHIP
+
+int gpiochip_irq_map(struct irq_domain *d, unsigned int irq,
+		     irq_hw_number_t hwirq);
+void gpiochip_irq_unmap(struct irq_domain *d, unsigned int irq);
 
 void gpiochip_set_chained_irqchip(struct gpio_chip *gpiochip,
 		struct irq_chip *irqchip,
