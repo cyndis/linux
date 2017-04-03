@@ -1617,7 +1617,7 @@ int gpiochip_irq_map(struct irq_domain *d, unsigned int irq,
 	 * category than their parents, so it won't report false recursion.
 	 */
 	irq_set_lockdep_class(irq, chip->irq.lock_key);
-	irq_set_chip_and_handler(irq, chip->irq.chip, chip->irq_handler);
+	irq_set_chip_and_handler(irq, chip->irq.chip, chip->irq.handler);
 	/* Chips that use nested thread handlers have them marked */
 	if (chip->irq.nested)
 		irq_set_nested_thread(irq, 1);
@@ -1730,8 +1730,6 @@ static int gpiochip_add_irqchip(struct gpio_chip *gpiochip)
 				 "Ignoring %u default trigger\n", type);
 		type = IRQ_TYPE_NONE;
 	}
-
-	gpiochip->irq_handler = gpiochip->irq.handler;
 
 	gpiochip->to_irq = gpiochip_to_irq;
 	gpiochip->irq.default_type = type;
@@ -1919,7 +1917,7 @@ int gpiochip_irqchip_add_key(struct gpio_chip *gpiochip,
 	}
 
 	gpiochip->irq.chip = irqchip;
-	gpiochip->irq_handler = handler;
+	gpiochip->irq.handler = handler;
 	gpiochip->irq.default_type = type;
 	gpiochip->to_irq = gpiochip_to_irq;
 	gpiochip->irq.lock_key = lock_key;
