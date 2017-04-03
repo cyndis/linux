@@ -25,6 +25,8 @@ struct module;
  * @chip: GPIO IRQ chip implementation, provided by GPIO driver
  * @first: if not dynamically assigned, the base (first) IRQ to allocate GPIO
  *         chip IRQs from
+ * @domain: interrupt translation domain; responsible for mapping
+ *          between GPIO hwirq number and linux irq number
  * @domain_ops: table of interrupt domain operations for this IRQ chip
  * @handler: the interrupt handler for the GPIO chip's parent interrupts
  * @lock_key: per GPIO IRQ chip lockdep class
@@ -41,6 +43,7 @@ struct module;
 struct gpio_irq_chip {
 	struct irq_chip *chip;
 	unsigned int first;
+	struct irq_domain *domain;
 	const struct irq_domain_ops *domain_ops;
 	irq_flow_handler_t handler;
 	struct lock_class_key *lock_key;
@@ -116,8 +119,6 @@ struct gpio_irq_chip {
  * @bgpio_dir: shadowed direction register for generic GPIO to clear/set
  *	direction safely.
  * @irqchip: GPIO IRQ chip impl, provided by GPIO driver
- * @irqdomain: Interrupt translation domain; responsible for mapping
- *	between GPIO hwirq number and linux irq number
  * @irq_base: first linux IRQ number assigned to GPIO IRQ chip (deprecated)
  * @irq_handler: the irq handler to use (often a predefined irq core function)
  *	for GPIO IRQs, provided by GPIO driver
@@ -198,7 +199,6 @@ struct gpio_chip {
 	 * to handle IRQs for most practical cases.
 	 */
 	struct irq_chip		*irqchip;
-	struct irq_domain	*irqdomain;
 	unsigned int		irq_base;
 	irq_flow_handler_t	irq_handler;
 	unsigned int		irq_default_type;
