@@ -19,6 +19,58 @@ struct module;
 
 #ifdef CONFIG_GPIOLIB
 
+#ifdef CONFIG_GPIOLIB_IRQCHIP
+/**
+ * struct gpio_irq_chip - GPIO interrupt controller
+ */
+struct gpio_irq_chip {
+	/**
+	 * @domain_ops:
+	 *
+	 * Table of interrupt domain operations for this IRQ chip.
+	 */
+	const struct irq_domain_ops *domain_ops;
+
+	/**
+	 * @parent_handler:
+	 *
+	 * The interrupt handler for the GPIO chip's parent interrupts, may be
+	 * NULL if the parent interrupts are nested rather than cascaded.
+	 */
+	irq_flow_handler_t parent_handler;
+
+	/**
+	 * @parent_handler_data:
+	 *
+	 * Data associated, and passed to, the handler for the parent
+	 * interrupt.
+	 */
+	void *parent_handler_data;
+
+	/**
+	 * @num_parents:
+	 *
+	 * The number of interrupt parents of a GPIO chip.
+	 */
+	unsigned int num_parents;
+
+	/**
+	 * @parents:
+	 *
+	 * A list of interrupt parents of a GPIO chip. This is owned by the
+	 * driver, so the core will only reference this list, not modify it.
+	 */
+	unsigned int *parents;
+
+	/**
+	 * @map:
+	 *
+	 * A list of interrupt parents for each line of a GPIO chip.
+	 */
+	unsigned int *map;
+};
+#endif
+
 /**
  * struct gpio_chip - abstract a GPIO controller
  * @label: a functional name for the GPIO device, such as a part
@@ -173,6 +225,14 @@ struct gpio_chip {
 	bool			irq_need_valid_mask;
 	unsigned long		*irq_valid_mask;
 	struct lock_class_key	*lock_key;
+
+	/**
+	 * @irq:
+	 *
+	 * Integrates interrupt chip functionality with the GPIO chip. Can be
+	 * used to handle IRQs for most practical cases.
+	 */
+	struct gpio_irq_chip irq;
 #endif
 
 #if defined(CONFIG_OF_GPIO)
@@ -263,6 +323,10 @@ int bgpio_init(struct gpio_chip *gc, struct device *dev,
 #endif
 
 #ifdef CONFIG_GPIOLIB_IRQCHIP
+
+int gpiochip_irq_map(struct irq_domain *d, unsigned int irq,
+		     irq_hw_number_t hwirq);
+void gpiochip_irq_unmap(struct irq_domain *d, unsigned int irq);
 
 void gpiochip_set_chained_irqchip(struct gpio_chip *gpiochip,
 		struct irq_chip *irqchip,
