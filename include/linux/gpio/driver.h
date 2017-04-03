@@ -127,8 +127,6 @@ struct gpio_irq_chip {
  * @irq_base: first linux IRQ number assigned to GPIO IRQ chip (deprecated)
  * @irq_handler: the irq handler to use (often a predefined irq core function)
  *	for GPIO IRQs, provided by GPIO driver
- * @irq_default_type: default IRQ triggering type applied during GPIO driver
- *	initialization, provided by GPIO driver
  *
  * A gpio_chip can help platforms abstract various sources of GPIOs so
  * they can all be accessed through a common programing interface.
@@ -197,7 +195,6 @@ struct gpio_chip {
 	 */
 	unsigned int		irq_base;
 	irq_flow_handler_t	irq_handler;
-	unsigned int		irq_default_type;
 
 	struct gpio_irq_chip	irq;
 #endif
