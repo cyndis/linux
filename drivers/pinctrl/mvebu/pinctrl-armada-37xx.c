@@ -670,7 +670,7 @@ static int armada_37xx_irqchip_register(struct platform_device *pdev,
 	 * the chained irq with all of them.
 	 */
 	for (i = 0; i < nrirqs; i++) {
-		struct irq_data *d = irq_get_irq_data(gc->irq_base + i);
+		struct irq_data *d = irq_get_irq_data(gc->irq.first + i);
 
 		/*
 		 * The mask field is a "precomputed bitmask for

@@ -24,7 +24,7 @@ struct module;
  * struct gpio_irq_chip - GPIO interrupt controller
  * @chip: GPIO IRQ chip implementation, provided by GPIO driver
  * @first: if not dynamically assigned, the base (first) IRQ to allocate GPIO
- *         chip IRQs from
+ *         chip IRQs from (deprecated)
  * @domain: interrupt translation domain; responsible for mapping
  *          between GPIO hwirq number and linux irq number
  * @domain_ops: table of interrupt domain operations for this IRQ chip
@@ -125,7 +125,6 @@ struct gpio_irq_chip {
  *	safely.
  * @bgpio_dir: shadowed direction register for generic GPIO to clear/set
  *	direction safely.
- * @irq_base: first linux IRQ number assigned to GPIO IRQ chip (deprecated)
  *
  * A gpio_chip can help platforms abstract various sources of GPIOs so
  * they can all be accessed through a common programing interface.
@@ -192,8 +191,6 @@ struct gpio_chip {
 	 * With CONFIG_GPIOLIB_IRQCHIP we get an irqchip inside the gpiolib
 	 * to handle IRQs for most practical cases.
 	 */
-	unsigned int		irq_base;
-
 	struct gpio_irq_chip	irq;
 #endif
 

@@ -1953,7 +1953,7 @@ int gpiochip_irqchip_add_key(struct gpio_chip *gpiochip,
 			 * Store the base into the gpiochip to be used when
 			 * unmapping the irqs.
 			 */
-			gpiochip->irq_base = irq_base;
+			gpiochip->irq.first = irq_base;
 			irq_base_set = true;
 		}
 	}

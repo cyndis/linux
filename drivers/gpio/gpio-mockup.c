@@ -146,7 +146,7 @@ static int gpio_mockup_name_lines(struct device *dev,
 
 static int gpio_mockup_to_irq(struct gpio_chip *chip, unsigned int offset)
 {
-	return chip->irq_base + offset;
+	return chip->irq.first + offset;
 }
 
 static void gpio_mockup_irqmask(struct irq_data *data)
@@ -189,7 +189,7 @@ static int gpio_mockup_irqchip_setup(struct device *dev,
 	if (irq_base < 0)
 		return irq_base;
 
-	gc->irq_base = irq_base;
+	gc->irq.first = irq_base;
 	gc->irq.chip = &gpio_mockup_irqchip;
 
 	for (i = 0; i < gc->ngpio; i++) {
@@ -228,11 +228,22 @@ static ssize_t gpio_mockup_event_write(struct file *file,
 	chip = priv->chip;
 	gc = &chip->gc;
 
-	if (chip->lines[priv->offset].irq_enabled) {
-		gpiod_set_value_cansleep(desc, val);
-		priv->chip->irq_ctx.irq = gc->irq_base + priv->offset;
-		irq_work_queue(&priv->chip->irq_ctx.work);
-	}
+	if (!chip->lines[priv->offset].irq_enabled)
+		return size;
+
+	if (copy_from_user(&buf, usr_buf, 1))
+		return -EFAULT;
+
+	if (buf == '0')
+		val = 0;
+	else if (buf == '1')
+		val = 1;
+	else
+		return -EINVAL;
+
+	gpiod_set_value_cansleep(desc, val);
+	priv->chip->irq_ctx.irq = gc->irq.first + priv->offset;
+	irq_work_queue(&priv->chip->irq_ctx.work);
 
 	return size;
 }
