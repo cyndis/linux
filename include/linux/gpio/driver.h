@@ -39,6 +39,10 @@ struct module;
  * @parents: a list of interrupt parents of a GPIO chip
  * @map: a list of interrupt parents for each line of a GPIO chip
  * @nested: True if set the interrupt handling is nested.
+ * @need_valid_mask: If set core allocates @valid_mask with all bits set to
+ *                   one
+ * @valid_mask: If not %NULL holds bitmask of GPIOs which are valid to be
+ *              included in IRQ domain of the chip
  */
 struct gpio_irq_chip {
 	struct irq_chip *chip;
@@ -54,6 +58,8 @@ struct gpio_irq_chip {
 	unsigned int *parents;
 	unsigned int *map;
 	bool nested;
+	bool need_valid_mask;
+	unsigned long *valid_mask;
 };
 #endif
 
@@ -126,10 +132,6 @@ struct gpio_irq_chip {
  * @irq_chained_parent: GPIO IRQ chip parent/bank linux irq number,
  *	provided by GPIO driver for chained interrupt (not for nested
  *	interrupts).
- * @irq_need_valid_mask: If set core allocates @irq_valid_mask with all
- *	bits set to one
- * @irq_valid_mask: If not %NULL holds bitmask of GPIOs which are valid to
- *	be included in IRQ domain of the chip
  * @lock_key: per GPIO IRQ chip lockdep class
  *
  * A gpio_chip can help platforms abstract various sources of GPIOs so
@@ -201,8 +203,6 @@ struct gpio_chip {
 	irq_flow_handler_t	irq_handler;
 	unsigned int		irq_default_type;
 	unsigned int		irq_chained_parent;
-	bool			irq_need_valid_mask;
-	unsigned long		*irq_valid_mask;
 	struct lock_class_key	*lock_key;
 
 	struct gpio_irq_chip	irq;
