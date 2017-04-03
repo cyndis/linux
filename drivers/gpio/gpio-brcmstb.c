@@ -202,7 +202,7 @@ static irqreturn_t brcmstb_gpio_wake_irq_handler(int irq, void *data)
 static void brcmstb_gpio_irq_bank_handler(struct brcmstb_gpio_bank *bank)
 {
 	struct brcmstb_gpio_priv *priv = bank->parent_priv;
-	struct irq_domain *irq_domain = bank->gc.irqdomain;
+	struct irq_domain *irq_domain = bank->gc.irq.domain;
 	void __iomem *reg_base = priv->reg_base;
 	unsigned long status;
 	unsigned long flags;

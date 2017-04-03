@@ -1549,7 +1549,7 @@ static void gpiochip_set_cascaded_irqchip(struct gpio_chip *gpiochip,
 {
 	unsigned int offset;
 
-	if (!gpiochip->irqdomain) {
+	if (!gpiochip->irq.domain) {
 		chip_err(gpiochip, "called %s before setting up irqchip\n",
 			 __func__);
 		return;
@@ -1576,7 +1576,7 @@ static void gpiochip_set_cascaded_irqchip(struct gpio_chip *gpiochip,
 	for (offset = 0; offset < gpiochip->ngpio; offset++) {
 		if (!gpiochip_irqchip_irq_valid(gpiochip, offset))
 			continue;
-		irq_set_parent(irq_find_mapping(gpiochip->irqdomain, offset),
+		irq_set_parent(irq_find_mapping(gpiochip->irq.domain, offset),
 			       parent_irq);
 	}
 }
@@ -1709,7 +1709,7 @@ static int gpiochip_to_irq(struct gpio_chip *chip, unsigned offset)
 {
 	if (!gpiochip_irqchip_irq_valid(chip, offset))
 		return -ENXIO;
-	return irq_create_mapping(chip->irqdomain, offset);
+	return irq_create_mapping(chip->irq.domain, offset);
 }
 
 /**
@@ -1769,10 +1769,10 @@ static int gpiochip_add_irqchip(struct gpio_chip *gpiochip)
 	else
 		ops = &gpiochip_domain_ops;
 
-	gpiochip->irqdomain = irq_domain_add_simple(np, gpiochip->ngpio,
-						    gpiochip->irq_base,
-						    ops, gpiochip);
-	if (!gpiochip->irqdomain)
+	gpiochip->irq.domain = irq_domain_add_simple(np, gpiochip->ngpio,
+						     gpiochip->irq_base,
+						     ops, gpiochip);
+	if (!gpiochip->irq.domain)
 		return -EINVAL;
 
 	/*
@@ -1814,7 +1814,7 @@ static int gpiochip_add_irqchip(struct gpio_chip *gpiochip)
 		if (!gpiochip_irqchip_irq_valid(gpiochip, i))
 			continue;
 
-		irq = irq_create_mapping(gpiochip->irqdomain, i);
+		irq = irq_create_mapping(gpiochip->irq.domain, i);
 		if (!irq) {
 			chip_err(gpiochip,
 				 "failed to create IRQ mapping for GPIO#%u\n",
@@ -1838,7 +1838,7 @@ static int gpiochip_add_irqchip(struct gpio_chip *gpiochip)
  */
 static void gpiochip_irqchip_remove(struct gpio_chip *gpiochip)
 {
-	unsigned int offset;
+	unsigned int offset, irq;
 
 	acpi_gpiochip_free_interrupts(gpiochip);
 
@@ -1858,14 +1858,16 @@ static void gpiochip_irqchip_remove(struct gpio_chip *gpiochip)
 	}
 
 	/* Remove all IRQ mappings and delete the domain */
-	if (gpiochip->irqdomain) {
+	if (gpiochip->irq.domain) {
 		for (offset = 0; offset < gpiochip->ngpio; offset++) {
 			if (!gpiochip_irqchip_irq_valid(gpiochip, offset))
 				continue;
-			irq_dispose_mapping(
-				irq_find_mapping(gpiochip->irqdomain, offset));
+
+			irq = irq_find_mapping(gpiochip->irq.domain, offset);
+			irq_dispose_mapping(irq);
 		}
-		irq_domain_remove(gpiochip->irqdomain);
+
+		irq_domain_remove(gpiochip->irq.domain);
 	}
 
 	if (gpiochip->irq.chip) {
@@ -1951,10 +1953,10 @@ int gpiochip_irqchip_add_key(struct gpio_chip *gpiochip,
 	gpiochip->irq_default_type = type;
 	gpiochip->to_irq = gpiochip_to_irq;
 	gpiochip->lock_key = lock_key;
-	gpiochip->irqdomain = irq_domain_add_simple(of_node,
+	gpiochip->irq.domain = irq_domain_add_simple(of_node,
 					gpiochip->ngpio, first_irq,
 					&gpiochip_domain_ops, gpiochip);
-	if (!gpiochip->irqdomain) {
+	if (!gpiochip->irq.domain) {
 		gpiochip->irq.chip = NULL;
 		return -EINVAL;
 	}
