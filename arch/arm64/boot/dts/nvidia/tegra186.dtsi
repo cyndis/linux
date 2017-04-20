@@ -355,6 +355,15 @@
 		nvidia,bpmp = <&bpmp>;
 	};
 
+	iommu@12000000 {
+		compatible = "arm,mmu-500";
+		reg = <0 0x12000000 0 0x1000000>;
+		#global-interrupts = <2>;
+		interrupts = <GIC_SPI 170 IRQ_TYPE_LEVEL_HIGH>,
+		             <GIC_SPI 171 IRQ_TYPE_LEVEL_HIGH>;
+		#iommu-cells = <1>;
+	};
+
 	host1x@13e00000 {
 		compatible = "nvidia,tegra186-host1x", "simple-bus";
 		reg = <0x0 0x13e00000 0x0 0x10000>,

@@ -752,8 +752,12 @@ static irqreturn_t arm_smmu_global_fault(int irq, void *dev)
 	gfsynr1 = readl_relaxed(gr0_base + ARM_SMMU_GR0_sGFSYNR1);
 	gfsynr2 = readl_relaxed(gr0_base + ARM_SMMU_GR0_sGFSYNR2);
 
-	if (!gfsr)
-		return IRQ_NONE;
+	if (!gfsr) {
+		if (smmu->num_context_irqs == 0)
+			return arm_smmu_context_fault(irq, dev);
+		else
+			return IRQ_NONE;
+	}
 
 	dev_err_ratelimited(smmu->dev,
 		"Unexpected global fault, this could be serious\n");
@@ -1040,13 +1044,16 @@ static int arm_smmu_init_domain_context(struct iommu_domain *domain,
 	 * Request context fault interrupt. Do this last to avoid the
 	 * handler seeing a half-initialised domain state.
 	 */
-	irq = smmu->irqs[smmu->num_global_irqs + cfg->irptndx];
-	ret = devm_request_irq(smmu->dev, irq, arm_smmu_context_fault,
+	if (smmu->num_context_irqs > 0) {
+		irq = smmu->irqs[smmu->num_global_irqs + cfg->irptndx];
+		ret = devm_request_irq(smmu->dev, irq, arm_smmu_context_fault,
 			       IRQF_SHARED, "arm-smmu-context-fault", domain);
-	if (ret < 0) {
-		dev_err(smmu->dev, "failed to request context IRQ %d (%u)\n",
-			cfg->irptndx, irq);
-		cfg->irptndx = INVALID_IRPTNDX;
+		if (ret < 0) {
+			dev_err(smmu->dev,
+				"failed to request context IRQ %d (%u)\n",
+				cfg->irptndx, irq);
+			cfg->irptndx = INVALID_IRPTNDX;
+		}
 	}
 
 	mutex_unlock(&smmu_domain->init_mutex);
@@ -1080,7 +1087,7 @@ static void arm_smmu_destroy_domain_context(struct iommu_domain *domain)
 	cb_base = ARM_SMMU_CB(smmu, cfg->cbndx);
 	writel_relaxed(0, cb_base + ARM_SMMU_CB_SCTLR);
 
-	if (cfg->irptndx != INVALID_IRPTNDX) {
+	if (cfg->irptndx != INVALID_IRPTNDX && smmu->num_context_irqs > 0) {
 		irq = smmu->irqs[smmu->num_global_irqs + cfg->irptndx];
 		devm_free_irq(smmu->dev, irq, domain);
 	}
@@ -2213,7 +2220,7 @@ static int arm_smmu_device_probe(struct platform_device *pdev)
 			smmu->num_context_irqs++;
 	}
 
-	if (!smmu->num_context_irqs) {
+	if (!smmu->num_context_irqs && smmu->version < ARM_SMMU_V2) {
 		dev_err(dev, "found %d interrupts but expected at least %d\n",
 			num_irqs, smmu->num_global_irqs + 1);
 		return -ENODEV;
@@ -2241,9 +2248,10 @@ static int arm_smmu_device_probe(struct platform_device *pdev)
 		return err;
 
 	if (smmu->version == ARM_SMMU_V2 &&
-	    smmu->num_context_banks != smmu->num_context_irqs) {
+	    smmu->num_context_banks != smmu->num_context_irqs &&
+	    smmu->num_context_irqs > 0) {
 		dev_err(dev,
-			"found only %d context interrupt(s) but %d required\n",
+			"found %d context interrupt(s) but %d or 0 required\n",
 			smmu->num_context_irqs, smmu->num_context_banks);
 		return -ENODEV;
 	}
