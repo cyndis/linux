@@ -114,6 +114,8 @@ int tegra_bpmp_transfer_atomic(struct tegra_bpmp *bpmp,
 			       struct tegra_bpmp_message *msg);
 int tegra_bpmp_transfer(struct tegra_bpmp *bpmp,
 			struct tegra_bpmp_message *msg);
+void tegra_bpmp_mrq_return(struct tegra_bpmp_channel *channel, int code,
+			   const void *data, size_t size);
 
 int tegra_bpmp_request_mrq(struct tegra_bpmp *bpmp, unsigned int mrq,
 			   tegra_bpmp_mrq_handler_t handler, void *data);
@@ -133,6 +135,15 @@ static inline int tegra_bpmp_init_clocks(struct tegra_bpmp *bpmp)
 int tegra_bpmp_init_resets(struct tegra_bpmp *bpmp);
 #else
 static inline int tegra_bpmp_init_resets(struct tegra_bpmp *bpmp)
+{
+	return 0;
+}
+#endif
+
+#if IS_ENABLED(CONFIG_TEGRA_BPMP_THERMAL)
+int tegra_bpmp_init_thermal(struct tegra_bpmp *bpmp);
+#else
+static inline int tegra_bpmp_init_thermal(struct tegra_bpmp *bpmp)
 {
 	return 0;
 }
