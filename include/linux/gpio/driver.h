@@ -19,6 +19,47 @@ struct module;
 
 #ifdef CONFIG_GPIOLIB
 
+/**
+ * struct gpio_bank - GPIO bank
+ *
+ * A GPIO bank, sometimes also referred to as port, represents a subset of the
+ * pins of a GPIO controller. The separation into banks is often caused by the
+ * sharing of one or more resource (register region, interrupt, ...) for each
+ * of the pins in the bank.
+ *
+ * In many cases the banking is transparent, but when it is not, GPIO drivers
+ * can use this code, along with some supporting fields in &struct gpio_chip.
+ */
+struct gpio_bank {
+	/**
+	 * @chip:
+	 *
+	 * A pointer to the &struct gpio_chip that this bank belongs to.
+	 */
+	struct gpio_chip *chip;
+
+	/**
+	 * @parent_irq:
+	 *
+	 * The interrupt parent for this bank.
+	 */
+	unsigned int parent_irq;
+
+	/**
+	 * @num_pins:
+	 *
+	 * The number of pins provided by this bank.
+	 */
+	unsigned int num_pins;
+
+	/**
+	 * @pending:
+	 *
+	 * Current interrupt state of each pin in the bank.
+	 */
+	unsigned long *pending;
+};
+
 #ifdef CONFIG_GPIOLIB_IRQCHIP
 /**
  * struct gpio_irq_chip - GPIO interrupt controller
@@ -136,6 +177,15 @@ struct gpio_irq_chip {
 	 * in IRQ domain of the chip.
 	 */
 	unsigned long *valid_mask;
+
+	/**
+	 * @update_bank:
+	 *
+	 * Callback used by banked interrupt controllers. The driver updates
+	 * the &gpio_bank.pending field of the given @bank with the current
+	 * status for each of the GPIOs that it provides.
+	 */
+	void (*update_bank)(struct gpio_bank *bank);
 };
 
 static inline struct gpio_irq_chip *to_gpio_irq_chip(struct irq_chip *chip)
@@ -281,6 +331,24 @@ struct gpio_chip {
 	struct gpio_irq_chip irq;
 #endif
 
+	/**
+	 * @banks:
+	 *
+	 * If a GPIO controller is subdivided into multiple banks, the driver
+	 * can use this field to store information about these banks.
+	 *
+	 * Note that the driver owns this field and the core will not modify
+	 * it, only reference it.
+	 */
+	struct gpio_bank **banks;
+
+	/**
+	 * @num_banks:
+	 *
+	 * The number of banks described in @banks.
+	 */
+	unsigned int num_banks;
+
 #if defined(CONFIG_OF_GPIO)
 	/*
 	 * If CONFIG_OF is enabled, then all GPIO controllers described in the
@@ -300,6 +368,38 @@ struct gpio_chip {
 	 * Number of cells used to form the GPIO specifier.
 	 */
 	unsigned int of_gpio_n_cells;
+
+	/**
+	 * @of_gpio_bank_shift:
+	 *
+	 * The offset of the field in the cell denoting the bank number of a
+	 * specified GPIO.
+	 */
+	unsigned int of_gpio_bank_shift;
+
+	/**
+	 * @of_gpio_bank_mask:
+	 *
+	 * The mask of the field in the cell denoting the bank number of a
+	 * specified GPIO.
+	 */
+	unsigned int of_gpio_bank_mask;
+
+	/**
+	 * @of_gpio_pin_shift:
+	 *
+	 * The offset of the field in the cell denoting the pin number of a
+	 * specified GPIO within its bank.
+	 */
+	unsigned int of_gpio_pin_shift;
+
+	/**
+	 * @of_gpio_pin_mask:
+	 *
+	 * The mask of the field in the cell denoting the pin number of a
+	 * specified GPIO within its bank.
+	 */
+	unsigned int of_gpio_pin_mask;
 
 	/**
 	 * @of_xlate:
@@ -374,6 +474,12 @@ int gpiochip_irq_map(struct irq_domain *d, unsigned int irq,
 		     irq_hw_number_t hwirq);
 void gpiochip_irq_unmap(struct irq_domain *d, unsigned int irq);
 
+int gpio_banked_irq_domain_xlate(struct irq_domain *domain,
+				 struct device_node *np,
+				 const u32 *spec, unsigned int size,
+				 unsigned long *hwirq,
+				 unsigned int *type);
+
 void gpiochip_set_chained_irqchip(struct gpio_chip *gpiochip,
 		struct irq_chip *irqchip,
 		unsigned int parent_irq,
@@ -390,6 +496,8 @@ int gpiochip_irqchip_add_key(struct gpio_chip *gpiochip,
 			     unsigned int type,
 			     bool nested,
 			     struct lock_class_key *lock_key);
+
+void gpio_irq_chip_banked_handler(struct irq_desc *desc);
 
 #ifdef CONFIG_LOCKDEP
 
