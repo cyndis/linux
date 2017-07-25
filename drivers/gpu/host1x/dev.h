@@ -142,6 +142,8 @@ struct host1x {
 	struct list_head list;
 };
 
+void host1x_hypervisor_writel(struct host1x *host1x, u32 r, u32 v);
+u32 host1x_hypervisor_readl(struct host1x *host1x, u32 r);
 void host1x_sync_writel(struct host1x *host1x, u32 r, u32 v);
 u32 host1x_sync_readl(struct host1x *host1x, u32 r);
 void host1x_ch_writel(struct host1x_channel *ch, u32 r, u32 v);

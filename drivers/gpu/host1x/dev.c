@@ -41,6 +41,16 @@
 #include "hw/host1x05.h"
 #include "hw/host1x06.h"
 
+void host1x_hypervisor_writel(struct host1x *host1x, u32 v, u32 r)
+{
+	writel(v, host1x->hv_regs + r);
+}
+
+u32 host1x_hypervisor_readl(struct host1x *host1x, u32 r)
+{
+	return readl(host1x->hv_regs + r);
+}
+
 void host1x_sync_writel(struct host1x *host1x, u32 v, u32 r)
 {
 	void __iomem *sync_regs = host1x->regs + host1x->info->sync_offset;
