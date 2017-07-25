@@ -106,6 +106,30 @@ static int syncpt_patch_wait(struct host1x_syncpt *sp, void *patch_addr)
 	return 0;
 }
 
+static void syncpt_assign_channel(struct host1x_syncpt *sp,
+				  struct host1x_channel *ch)
+{
+#if HOST1X_HW >= 6
+	struct host1x *host = sp->host;
+
+	if (!host->hv_regs)
+		return;
+
+	host1x_sync_writel(host,
+			   HOST1X_SYNC_SYNCPT_CH_APP_CH(ch ? ch->id : 0xff),
+			   HOST1X_SYNC_SYNCPT_CH_APP(sp->id));
+#endif
+}
+
+static void syncpt_set_protection(struct host1x *host, bool enabled)
+{
+#if HOST1X_HW >= 6
+	host1x_hypervisor_writel(host,
+				 enabled ? HOST1X_HV_SYNCPT_PROT_EN_CH_EN : 0,
+				 HOST1X_HV_SYNCPT_PROT_EN);
+#endif
+}
+
 static const struct host1x_syncpt_ops host1x_syncpt_ops = {
 	.restore = syncpt_restore,
 	.restore_wait_base = syncpt_restore_wait_base,
@@ -113,4 +137,6 @@ static const struct host1x_syncpt_ops host1x_syncpt_ops = {
 	.load = syncpt_load,
 	.cpu_incr = syncpt_cpu_incr,
 	.patch_wait = syncpt_patch_wait,
+	.assign_channel = syncpt_assign_channel,
+	.set_protection = syncpt_set_protection,
 };

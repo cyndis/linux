@@ -398,6 +398,8 @@ int host1x_syncpt_init(struct host1x *host)
 	for (i = 0; i < host->info->nb_pts; i++) {
 		syncpt[i].id = i;
 		syncpt[i].host = host;
+
+		host1x_hw_syncpt_assign_channel(host, &syncpt[i], NULL);
 	}
 
 	for (i = 0; i < host->info->nb_bases; i++)
@@ -408,6 +410,7 @@ int host1x_syncpt_init(struct host1x *host)
 	host->bases = bases;
 
 	host1x_syncpt_restore(host);
+	host1x_hw_syncpt_set_protection(host, true);
 
 	/* Allocate sync point to use for clearing waits for expired fences */
 	host->nop_sp = host1x_syncpt_alloc(host, NULL, 0);
