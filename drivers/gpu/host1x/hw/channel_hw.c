@@ -122,6 +122,8 @@ static int channel_submit(struct host1x_job *job)
 		goto error;
 	}
 
+	host1x_ch_writel(ch, 0x1, 0x84);
+
 	/* begin a CDMA submit */
 	err = host1x_cdma_begin(&ch->cdma, job);
 	if (err) {

@@ -361,9 +361,14 @@ int dma_info_to_prot(enum dma_data_direction dir, bool coherent,
 static dma_addr_t iommu_dma_alloc_iova(struct iommu_domain *domain,
 		size_t size, dma_addr_t dma_limit, struct device *dev)
 {
+	pr_warn("%s: domain=%p\n", __func__, domain);
+
 	struct iommu_dma_cookie *cookie = domain->iova_cookie;
 	struct iova_domain *iovad = &cookie->iovad;
 	unsigned long shift, iova_len, iova = 0;
+
+	pr_warn("%s: cookie=%p iovad=%p\n", __func__, cookie, iovad);
+	pr_warn("%s: cookie->type=%d\n", __func__, cookie->type);
 
 	if (cookie->type == IOMMU_DMA_MSI_COOKIE) {
 		cookie->msi_iova += size;
@@ -388,8 +393,11 @@ static dma_addr_t iommu_dma_alloc_iova(struct iommu_domain *domain,
 	if (dma_limit > DMA_BIT_MASK(32) && dev_is_pci(dev))
 		iova = alloc_iova_fast(iovad, iova_len, DMA_BIT_MASK(32) >> shift);
 
+	pr_warn("%s: allocating iova\n", __func__);
 	if (!iova)
 		iova = alloc_iova_fast(iovad, iova_len, dma_limit >> shift);
+
+	pr_warn("%s: allocated iova %p\n", __func__, iova << shift);
 
 	return (dma_addr_t)iova << shift;
 }
@@ -528,8 +536,17 @@ struct page **iommu_dma_alloc(struct device *dev, size_t size, gfp_t gfp,
 		void (*flush_page)(struct device *, const void *, phys_addr_t))
 {
 	struct iommu_domain *domain = iommu_get_domain_for_dev(dev);
+
+	pr_warn("%s: domain=%p\n", __func__, domain);
+
 	struct iommu_dma_cookie *cookie = domain->iova_cookie;
+
+	pr_warn("%s: cookie=%p\n", __func__, cookie);
+
 	struct iova_domain *iovad = &cookie->iovad;
+
+	pr_warn("%s: iovad=%p\n", __func__, iovad);
+
 	struct page **pages;
 	struct sg_table sgt;
 	dma_addr_t iova;

@@ -881,6 +881,8 @@ static void __iommu_setup_dma_ops(struct device *dev, u64 dma_base, u64 size,
 {
 	struct iommu_domain *domain;
 
+	return;
+
 	if (!ops)
 		return;
 

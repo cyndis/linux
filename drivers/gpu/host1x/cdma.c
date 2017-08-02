@@ -109,6 +109,10 @@ static int host1x_pushbuffer_init(struct push_buffer *pb)
 				IOMMU_READ);
 		if (err)
 			goto iommu_free_iova;
+
+		pr_warn("%s: pb mapped to virt=%p phys=%pap dma=%pad\n",
+			__func__, pb->mapped, &pb->phys, &pb->dma);
+
 	} else {
 		pb->mapped = dma_alloc_wc(host1x->dev, size, &pb->phys,
 					  GFP_KERNEL);

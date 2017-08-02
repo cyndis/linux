@@ -239,6 +239,11 @@ static int host1x_probe(struct platform_device *pdev)
 
 		geometry = &host->domain->geometry;
 
+		pr_warn("%s: aperture %llx..%llx\n", __func__,
+			geometry->aperture_start, geometry->aperture_end);
+		if (geometry->aperture_end > 0xffffffff)
+			geometry->aperture_end = 0xffffffff;
+
 		order = __ffs(host->domain->pgsize_bitmap);
 		init_iova_domain(&host->iova, 1UL << order,
 				 geometry->aperture_start >> order,

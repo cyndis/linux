@@ -355,7 +355,7 @@
 		nvidia,bpmp = <&bpmp>;
 	};
 
-	iommu@12000000 {
+	smmu: iommu@12000000 {
 		compatible = "arm,mmu-500";
 		reg = <0 0x12000000 0 0x1000000>;
 		#global-interrupts = <2>;
@@ -375,6 +375,8 @@
 		clock-names = "host1x";
 		resets = <&bpmp TEGRA186_RESET_HOST1X>;
 		reset-names = "host1x";
+
+		iommus = <&smmu 0x1>;
 
 		#address-cells = <2>;
 		#size-cells = <2>;
