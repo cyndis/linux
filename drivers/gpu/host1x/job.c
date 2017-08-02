@@ -178,6 +178,8 @@ static int do_waitchks(struct host1x_job *job, struct host1x *host,
 	return 0;
 }
 
+#define TR do { pr_warn("here %s:%d\n", __FILE__, __LINE__); } while (0);
+
 static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 {
 	unsigned int i;
@@ -185,10 +187,16 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 
 	job->num_unpins = 0;
 
+	pr_warn("%s: %d relocs\n", __func__, job->num_relocs);
+
+	TR
+
 	for (i = 0; i < job->num_relocs; i++) {
 		struct host1x_reloc *reloc = &job->relocarray[i];
 		struct sg_table *sgt;
 		dma_addr_t phys_addr;
+
+		TR
 
 		reloc->target.bo = host1x_bo_get(reloc->target.bo);
 		if (!reloc->target.bo) {
@@ -196,17 +204,23 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 			goto unpin;
 		}
 
+		TR
+
 		phys_addr = host1x_bo_pin(reloc->target.bo, &sgt);
 		if (!phys_addr) {
 			err = -EINVAL;
 			goto unpin;
 		}
 
+		TR
+
 		job->addr_phys[job->num_unpins] = phys_addr;
 		job->unpins[job->num_unpins].bo = reloc->target.bo;
 		job->unpins[job->num_unpins].sgt = sgt;
 		job->num_unpins++;
 	}
+
+	TR
 
 	for (i = 0; i < job->num_gathers; i++) {
 		struct host1x_job_gather *g = &job->gathers[i];
@@ -218,52 +232,74 @@ static unsigned int pin_job(struct host1x *host, struct host1x_job *job)
 		struct iova *alloc;
 		unsigned int j;
 
+		TR
+
 		g->bo = host1x_bo_get(g->bo);
+		TR
 		if (!g->bo) {
 			err = -EINVAL;
 			goto unpin;
 		}
+		TR
 
 		phys_addr = host1x_bo_pin(g->bo, &sgt);
+		TR
 		if (!phys_addr) {
 			err = -EINVAL;
 			goto unpin;
 		}
+		TR
 
 		if (!IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL) && host->domain) {
+			TR
+			pr_warn("%s: sgt=%p\n", __func__, sgt);
 			for_each_sg(sgt->sgl, sg, sgt->nents, j)
 				gather_size += sg->length;
+			TR
 			gather_size = iova_align(&host->iova, gather_size);
+			TR
 
 			shift = iova_shift(&host->iova);
+			TR
 			alloc = alloc_iova(&host->iova, gather_size >> shift,
 					   host->iova_end >> shift, true);
+			TR
 			if (!alloc) {
 				err = -ENOMEM;
 				goto unpin;
 			}
+			TR
 
 			err = iommu_map_sg(host->domain,
 					iova_dma_addr(&host->iova, alloc),
 					sgt->sgl, sgt->nents, IOMMU_READ);
+			TR
 			if (err == 0) {
+				TR
 				__free_iova(&host->iova, alloc);
 				err = -EINVAL;
 				goto unpin;
 			}
+			TR
 
 			job->addr_phys[job->num_unpins] =
 				iova_dma_addr(&host->iova, alloc);
+			TR
 			job->unpins[job->num_unpins].size = gather_size;
+			TR
 		} else {
 			job->addr_phys[job->num_unpins] = phys_addr;
 		}
 
+		TR
+
 		job->gather_addr_phys[i] = job->addr_phys[job->num_unpins];
+		TR
 
 		job->unpins[job->num_unpins].bo = g->bo;
 		job->unpins[job->num_unpins].sgt = sgt;
 		job->num_unpins++;
+		TR
 	}
 
 	return 0;
@@ -626,6 +662,8 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 	struct host1x *host = dev_get_drvdata(dev->parent);
 	DECLARE_BITMAP(waitchk_mask, host1x_syncpt_nb_pts(host));
 
+	TR
+
 	bitmap_zero(waitchk_mask, host1x_syncpt_nb_pts(host));
 	for (i = 0; i < job->num_waitchk; i++) {
 		u32 syncpt_id = job->waitchk[i].syncpt_id;
@@ -634,14 +672,20 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 			set_bit(syncpt_id, waitchk_mask);
 	}
 
+	TR
+
 	/* get current syncpt values for waitchk */
 	for_each_set_bit(i, waitchk_mask, host1x_syncpt_nb_pts(host))
 		host1x_syncpt_load(host->syncpt + i);
+
+	TR
 
 	/* pin memory */
 	err = pin_job(host, job);
 	if (err)
 		goto out;
+
+	TR
 
 	if (IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL)) {
 		err = copy_gathers(job, dev);
@@ -649,17 +693,25 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 			goto out;
 	}
 
+	TR
+
 	/* patch gathers */
 	for (i = 0; i < job->num_gathers; i++) {
 		struct host1x_job_gather *g = &job->gathers[i];
+
+		TR
 
 		/* process each gather mem only once */
 		if (g->handled)
 			continue;
 
+		TR
+
 		/* copy_gathers() sets gathers base if firewall is enabled */
 		if (!IS_ENABLED(CONFIG_TEGRA_HOST1X_FIREWALL))
 			g->base = job->gather_addr_phys[i];
+
+		TR
 
 		for (j = i + 1; j < job->num_gathers; j++) {
 			if (job->gathers[j].bo == g->bo) {
@@ -668,14 +720,22 @@ int host1x_job_pin(struct host1x_job *job, struct device *dev)
 			}
 		}
 
+		TR
+
 		err = do_relocs(job, g);
 		if (err)
 			break;
 
+		TR
+
 		err = do_waitchks(job, host, g);
 		if (err)
 			break;
+
+		TR
 	}
+
+	TR
 
 out:
 	if (err)

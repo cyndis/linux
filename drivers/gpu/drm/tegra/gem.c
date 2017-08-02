@@ -31,6 +31,8 @@ static dma_addr_t tegra_bo_pin(struct host1x_bo *bo, struct sg_table **sgt)
 {
 	struct tegra_bo *obj = host1x_to_tegra_bo(bo);
 
+	pr_warn("%s: sgt=%p\n", __func__, obj->sgt);
+
 	*sgt = obj->sgt;
 
 	return obj->paddr;
@@ -253,6 +255,8 @@ static int tegra_bo_alloc(struct drm_device *drm, struct tegra_bo *bo)
 	int err;
 
 	if (tegra->domain) {
+		pr_warn("%s: allocating bo for iommu\n", __func__);
+
 		err = tegra_bo_get_pages(drm, bo);
 		if (err < 0)
 			return err;
@@ -273,6 +277,9 @@ static int tegra_bo_alloc(struct drm_device *drm, struct tegra_bo *bo)
 				size);
 			return -ENOMEM;
 		}
+
+		bo->sgt = kzalloc(sizeof(*bo->sgt), GFP_KERNEL);
+		dma_get_sgtable(drm->dev, bo->sgt, bo->vaddr, bo->paddr, size);
 	}
 
 	return 0;
