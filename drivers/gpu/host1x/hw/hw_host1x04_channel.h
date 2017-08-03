@@ -125,9 +125,9 @@ static inline u32 host1x_channel_channelctrl_r(void)
 	host1x_channel_channelctrl_r()
 static inline u32 host1x_channel_channelctrl_kernel_filter_gbuffer_f(u32 v)
 {
-        return (v & 0x1) << 2;
+	return (v & 0x1) << 2;
 }
 #define HOST1X_CHANNEL_CHANNELCTRL_KERNEL_FILTER_GBUFFER(v) \
-        host1x_channel_channelctrl_kernel_filter_gbuffer_f(v)
+	host1x_channel_channelctrl_kernel_filter_gbuffer_f(v)
 
 #endif
