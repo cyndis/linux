@@ -110,7 +110,7 @@ struct host1x {
 	const struct host1x_info *info;
 
 	void __iomem *regs;
-        void __iomem *hv_regs; /* hypervisor region */
+	void __iomem *hv_regs; /* hypervisor region */
 	struct host1x_syncpt *syncpt;
 	struct host1x_syncpt_base *bases;
 	struct device *dev;
