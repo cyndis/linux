@@ -79,7 +79,8 @@ struct host1x_syncpt_ops {
 	u32 (*load)(struct host1x_syncpt *syncpt);
 	int (*cpu_incr)(struct host1x_syncpt *syncpt);
 	int (*patch_wait)(struct host1x_syncpt *syncpt, void *patch_addr);
-	void (*assign_channel)(struct host1x_syncpt *syncpt, struct host1x_channel *channel);
+	void (*assign_channel)(struct host1x_syncpt *syncpt,
+	                       struct host1x_channel *channel);
 	void (*set_protection)(struct host1x *host, bool enabled);
 };
 
