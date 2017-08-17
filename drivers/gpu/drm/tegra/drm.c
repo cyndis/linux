@@ -386,12 +386,10 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	unsigned int num_cmdbufs = args->num_cmdbufs;
 	unsigned int num_relocs = args->num_relocs;
 	unsigned int num_waitchks = args->num_waitchks;
-	struct drm_tegra_cmdbuf __user *cmdbufs =
-		(void __user *)(uintptr_t)args->cmdbufs;
-	struct drm_tegra_reloc __user *relocs =
-		(void __user *)(uintptr_t)args->relocs;
-	struct drm_tegra_waitchk __user *waitchks =
-		(void __user *)(uintptr_t)args->waitchks;
+	struct drm_tegra_cmdbuf __user *cmdbufs;
+	struct drm_tegra_reloc __user *relocs;
+	struct drm_tegra_waitchk __user *waitchks;
+	struct drm_tegra_syncpt __user *user_syncpt;
 	struct drm_tegra_syncpt syncpt;
 	struct host1x *host1x = dev_get_drvdata(drm->dev->parent);
 	struct drm_gem_object **refs;
@@ -399,6 +397,11 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	struct host1x_job *job;
 	unsigned int num_refs;
 	int err;
+
+	cmdbufs = u64_to_user_ptr(args->cmdbufs);
+	relocs = u64_to_user_ptr(args->relocs);
+	waitchks = u64_to_user_ptr(args->waitchks);
+	user_syncpt = u64_to_user_ptr(args->syncpts);
 
 	/* We don't yet support other than one syncpt_incr struct per submit */
 	if (args->num_syncpts != 1)
@@ -539,8 +542,7 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 		}
 	}
 
-	if (copy_from_user(&syncpt, (void __user *)(uintptr_t)args->syncpts,
-			   sizeof(syncpt))) {
+	if (copy_from_user(&syncpt, user_syncpt, sizeof(syncpt))) {
 		err = -EFAULT;
 		goto fail;
 	}
