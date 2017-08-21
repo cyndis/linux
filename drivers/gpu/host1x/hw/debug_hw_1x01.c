@@ -78,6 +78,7 @@ static void host1x_debug_show_channel_fifo(struct host1x *host,
 					   struct output *o)
 {
 	u32 val, rd_ptr, wr_ptr, start, end;
+	u32 payload = INVALID_PAYLOAD;
 	unsigned int data_count = 0;
 
 	host1x_debug_output(o, "%u: fifo:\n", ch->id);
@@ -112,7 +113,7 @@ static void host1x_debug_show_channel_fifo(struct host1x *host,
 
 		if (!data_count) {
 			host1x_debug_output(o, "%08x: ", val);
-			data_count = show_channel_command(o, val);
+			data_count = show_channel_command(o, val, &payload);
 		} else {
 			host1x_debug_cont(o, "%08x%s", val,
 					  data_count > 1 ? ", " : "])\n");
