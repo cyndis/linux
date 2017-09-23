@@ -105,6 +105,9 @@ int of_dma_configure(struct device *dev, struct device_node *np)
 #ifdef CONFIG_ARM_AMBA
 		    dev->bus != &amba_bustype &&
 #endif
+#if IS_ENABLED(CONFIG_TEGRA_HOST1X)
+		    !(dev->bus && !strcmp("host1x", dev->bus->name)) &&
+#endif
 		    dev->bus != &platform_bus_type)
 			return ret == -ENODEV ? 0 : ret;
 
