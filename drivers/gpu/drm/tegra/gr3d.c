@@ -256,27 +256,29 @@ static int gr3d_probe(struct platform_device *pdev)
 
 	gr3d->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(gr3d->clk)) {
-		dev_err(&pdev->dev, "cannot get clock\n");
+		DRM_DEV_ERROR(&pdev->dev, "cannot get clock\n");
 		return PTR_ERR(gr3d->clk);
 	}
 
 	gr3d->rst = devm_reset_control_get(&pdev->dev, "3d");
 	if (IS_ERR(gr3d->rst)) {
-		dev_err(&pdev->dev, "cannot get reset\n");
+		DRM_DEV_ERROR(&pdev->dev, "cannot get reset\n");
 		return PTR_ERR(gr3d->rst);
 	}
 
 	if (of_device_is_compatible(np, "nvidia,tegra30-gr3d")) {
 		gr3d->clk_secondary = devm_clk_get(&pdev->dev, "3d2");
 		if (IS_ERR(gr3d->clk_secondary)) {
-			dev_err(&pdev->dev, "cannot get secondary clock\n");
+			DRM_DEV_ERROR(&pdev->dev,
+				"cannot get secondary clock\n");
 			return PTR_ERR(gr3d->clk_secondary);
 		}
 
 		gr3d->rst_secondary = devm_reset_control_get(&pdev->dev,
 								"3d2");
 		if (IS_ERR(gr3d->rst_secondary)) {
-			dev_err(&pdev->dev, "cannot get secondary reset\n");
+			DRM_DEV_ERROR(&pdev->dev,
+				"cannot get secondary reset\n");
 			return PTR_ERR(gr3d->rst_secondary);
 		}
 	}
@@ -284,7 +286,7 @@ static int gr3d_probe(struct platform_device *pdev)
 	err = tegra_powergate_sequence_power_up(TEGRA_POWERGATE_3D, gr3d->clk,
 						gr3d->rst);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to power up 3D unit\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to power up 3D unit\n");
 		return err;
 	}
 
@@ -293,7 +295,7 @@ static int gr3d_probe(struct platform_device *pdev)
 							gr3d->clk_secondary,
 							gr3d->rst_secondary);
 		if (err < 0) {
-			dev_err(&pdev->dev,
+			DRM_DEV_ERROR(&pdev->dev,
 				"failed to power up secondary 3D unit\n");
 			return err;
 		}
@@ -311,7 +313,8 @@ static int gr3d_probe(struct platform_device *pdev)
 
 	err = host1x_client_register(&gr3d->client.base);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to register host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to register host1x client: %d\n",
 			err);
 		return err;
 	}
@@ -332,7 +335,8 @@ static int gr3d_remove(struct platform_device *pdev)
 
 	err = host1x_client_unregister(&gr3d->client.base);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to unregister host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to unregister host1x client: %d\n",
 			err);
 		return err;
 	}

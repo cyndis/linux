@@ -164,13 +164,13 @@ static int gr2d_probe(struct platform_device *pdev)
 
 	gr2d->clk = devm_clk_get(dev, NULL);
 	if (IS_ERR(gr2d->clk)) {
-		dev_err(dev, "cannot get clock\n");
+		DRM_DEV_ERROR(dev, "cannot get clock\n");
 		return PTR_ERR(gr2d->clk);
 	}
 
 	err = clk_prepare_enable(gr2d->clk);
 	if (err) {
-		dev_err(dev, "cannot turn on clock\n");
+		DRM_DEV_ERROR(dev, "cannot turn on clock\n");
 		return err;
 	}
 
@@ -186,7 +186,8 @@ static int gr2d_probe(struct platform_device *pdev)
 
 	err = host1x_client_register(&gr2d->client.base);
 	if (err < 0) {
-		dev_err(dev, "failed to register host1x client: %d\n", err);
+		DRM_DEV_ERROR(dev,
+			"failed to register host1x client: %d\n", err);
 		clk_disable_unprepare(gr2d->clk);
 		return err;
 	}
@@ -207,7 +208,8 @@ static int gr2d_remove(struct platform_device *pdev)
 
 	err = host1x_client_unregister(&gr2d->client.base);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to unregister host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to unregister host1x client: %d\n",
 			err);
 		return err;
 	}

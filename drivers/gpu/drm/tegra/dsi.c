@@ -854,7 +854,8 @@ static void tegra_dsi_unprepare(struct tegra_dsi *dsi)
 
 	err = tegra_mipi_disable(dsi->mipi);
 	if (err < 0)
-		dev_err(dsi->dev, "failed to disable MIPI calibration: %d\n",
+		DRM_DEV_ERROR(dsi->dev,
+		"failed to disable MIPI calibration: %d\n",
 			err);
 
 	pm_runtime_put(dsi->dev);
@@ -887,7 +888,7 @@ static void tegra_dsi_encoder_disable(struct drm_encoder *encoder)
 
 	err = tegra_dsi_wait_idle(dsi, 100);
 	if (err < 0)
-		dev_dbg(dsi->dev, "failed to idle DSI: %d\n", err);
+		DRM_DEV_DEBUG(dsi->dev, "failed to idle DSI: %d\n", err);
 
 	tegra_dsi_soft_reset(dsi);
 
@@ -907,12 +908,13 @@ static void tegra_dsi_prepare(struct tegra_dsi *dsi)
 
 	err = tegra_mipi_enable(dsi->mipi);
 	if (err < 0)
-		dev_err(dsi->dev, "failed to enable MIPI calibration: %d\n",
+		DRM_DEV_ERROR(dsi->dev,
+			"failed to enable MIPI calibration: %d\n",
 			err);
 
 	err = tegra_dsi_pad_calibrate(dsi);
 	if (err < 0)
-		dev_err(dsi->dev, "MIPI calibration failed: %d\n", err);
+		DRM_DEV_ERROR(dsi->dev, "MIPI calibration failed: %d\n", err);
 
 	if (dsi->slave)
 		tegra_dsi_prepare(dsi->slave);
@@ -1006,7 +1008,8 @@ tegra_dsi_encoder_atomic_check(struct drm_encoder *encoder,
 
 	err = mipi_dphy_timing_validate(&state->timing, state->period);
 	if (err < 0) {
-		dev_err(dsi->dev, "failed to validate D-PHY timing: %d\n", err);
+		DRM_DEV_ERROR(dsi->dev,
+			"failed to validate D-PHY timing: %d\n", err);
 		return err;
 	}
 
@@ -1032,7 +1035,8 @@ tegra_dsi_encoder_atomic_check(struct drm_encoder *encoder,
 	err = tegra_dc_state_setup_clock(dc, crtc_state, dsi->clk_parent,
 					 plld, scdiv);
 	if (err < 0) {
-		dev_err(output->dev, "failed to setup CRTC state: %d\n", err);
+		DRM_DEV_ERROR(output->dev,
+			"failed to setup CRTC state: %d\n", err);
 		return err;
 	}
 
@@ -1074,7 +1078,8 @@ static int tegra_dsi_init(struct host1x_client *client)
 
 		err = tegra_output_init(drm, &dsi->output);
 		if (err < 0)
-			dev_err(dsi->dev, "failed to initialize output: %d\n",
+			DRM_DEV_ERROR(dsi->dev,
+				"failed to initialize output: %d\n",
 				err);
 
 		dsi->output.encoder.possible_crtcs = 0x3;
@@ -1083,7 +1088,8 @@ static int tegra_dsi_init(struct host1x_client *client)
 	if (IS_ENABLED(CONFIG_DEBUG_FS)) {
 		err = tegra_dsi_debugfs_init(dsi, drm->primary);
 		if (err < 0)
-			dev_err(dsi->dev, "debugfs setup failed: %d\n", err);
+			DRM_DEV_ERROR(dsi->dev,
+				"debugfs setup failed: %d\n", err);
 	}
 
 	return 0;
@@ -1159,11 +1165,11 @@ static ssize_t tegra_dsi_read_response(struct tegra_dsi *dsi,
 	switch (value & 0x3f) {
 	case MIPI_DSI_RX_ACKNOWLEDGE_AND_ERROR_REPORT:
 		errors = (value >> 8) & 0xffff;
-		dev_dbg(dsi->dev, "Acknowledge and error report: %04x\n",
+		DRM_DEV_DEBUG(dsi->dev, "Acknowledge and error report: %04x\n",
 			errors);
 		for (i = 0; i < ARRAY_SIZE(error_report); i++)
 			if (errors & BIT(i))
-				dev_dbg(dsi->dev, "  %2u: %s\n", i,
+				DRM_DEV_DEBUG(dsi->dev, "  %2u: %s\n", i,
 					error_report[i]);
 		break;
 
@@ -1187,7 +1193,7 @@ static ssize_t tegra_dsi_read_response(struct tegra_dsi *dsi,
 		break;
 
 	default:
-		dev_err(dsi->dev, "unhandled response type: %02x\n",
+		DRM_DEV_ERROR(dsi->dev, "unhandled response type: %02x\n",
 			value & 0x3f);
 		return -EPROTO;
 	}
@@ -1361,14 +1367,15 @@ static ssize_t tegra_dsi_host_transfer(struct mipi_dsi_host *host,
 			break;
 
 		default:
-			dev_err(dsi->dev, "unknown status: %08x\n", value);
+			DRM_DEV_ERROR(dsi->dev,
+				"unknown status: %08x\n", value);
 			break;
 		}
 
 		if (count > 1) {
 			err = tegra_dsi_read_response(dsi, msg, count);
 			if (err < 0)
-				dev_err(dsi->dev,
+				DRM_DEV_ERROR(dsi->dev,
 					"failed to parse response: %zd\n",
 					err);
 			else {
@@ -1419,12 +1426,13 @@ static int tegra_dsi_host_attach(struct mipi_dsi_host *host,
 	if (dsi->slave) {
 		int err;
 
-		dev_dbg(dsi->dev, "attaching dual-channel device %s\n",
+		DRM_DEV_DEBUG(dsi->dev, "attaching dual-channel device %s\n",
 			dev_name(&device->dev));
 
 		err = tegra_dsi_ganged_setup(dsi);
 		if (err < 0) {
-			dev_err(dsi->dev, "failed to set up ganged mode: %d\n",
+			DRM_DEV_ERROR(dsi->dev,
+				"failed to set up ganged mode: %d\n",
 				err);
 			return err;
 		}
@@ -1530,31 +1538,31 @@ static int tegra_dsi_probe(struct platform_device *pdev)
 
 	dsi->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(dsi->clk)) {
-		dev_err(&pdev->dev, "cannot get DSI clock\n");
+		DRM_DEV_ERROR(&pdev->dev, "cannot get DSI clock\n");
 		return PTR_ERR(dsi->clk);
 	}
 
 	dsi->clk_lp = devm_clk_get(&pdev->dev, "lp");
 	if (IS_ERR(dsi->clk_lp)) {
-		dev_err(&pdev->dev, "cannot get low-power clock\n");
+		DRM_DEV_ERROR(&pdev->dev, "cannot get low-power clock\n");
 		return PTR_ERR(dsi->clk_lp);
 	}
 
 	dsi->clk_parent = devm_clk_get(&pdev->dev, "parent");
 	if (IS_ERR(dsi->clk_parent)) {
-		dev_err(&pdev->dev, "cannot get parent clock\n");
+		DRM_DEV_ERROR(&pdev->dev, "cannot get parent clock\n");
 		return PTR_ERR(dsi->clk_parent);
 	}
 
 	dsi->vdd = devm_regulator_get(&pdev->dev, "avdd-dsi-csi");
 	if (IS_ERR(dsi->vdd)) {
-		dev_err(&pdev->dev, "cannot get VDD supply\n");
+		DRM_DEV_ERROR(&pdev->dev, "cannot get VDD supply\n");
 		return PTR_ERR(dsi->vdd);
 	}
 
 	err = tegra_dsi_setup_clocks(dsi);
 	if (err < 0) {
-		dev_err(&pdev->dev, "cannot setup clocks\n");
+		DRM_DEV_ERROR(&pdev->dev, "cannot setup clocks\n");
 		return err;
 	}
 
@@ -1572,7 +1580,8 @@ static int tegra_dsi_probe(struct platform_device *pdev)
 
 	err = mipi_dsi_host_register(&dsi->host);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to register DSI host: %d\n", err);
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to register DSI host: %d\n", err);
 		goto mipi_free;
 	}
 
@@ -1585,7 +1594,8 @@ static int tegra_dsi_probe(struct platform_device *pdev)
 
 	err = host1x_client_register(&dsi->client);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to register host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to register host1x client: %d\n",
 			err);
 		goto unregister;
 	}
@@ -1608,7 +1618,8 @@ static int tegra_dsi_remove(struct platform_device *pdev)
 
 	err = host1x_client_unregister(&dsi->client);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to unregister host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to unregister host1x client: %d\n",
 			err);
 		return err;
 	}
@@ -1630,7 +1641,7 @@ static int tegra_dsi_suspend(struct device *dev)
 	if (dsi->rst) {
 		err = reset_control_assert(dsi->rst);
 		if (err < 0) {
-			dev_err(dev, "failed to assert reset: %d\n", err);
+			DRM_DEV_ERROR(dev, "failed to assert reset: %d\n", err);
 			return err;
 		}
 	}
@@ -1652,19 +1663,20 @@ static int tegra_dsi_resume(struct device *dev)
 
 	err = regulator_enable(dsi->vdd);
 	if (err < 0) {
-		dev_err(dsi->dev, "failed to enable VDD supply: %d\n", err);
+		DRM_DEV_ERROR(dsi->dev,
+			"failed to enable VDD supply: %d\n", err);
 		return err;
 	}
 
 	err = clk_prepare_enable(dsi->clk);
 	if (err < 0) {
-		dev_err(dev, "cannot enable DSI clock: %d\n", err);
+		DRM_DEV_ERROR(dev, "cannot enable DSI clock: %d\n", err);
 		goto disable_vdd;
 	}
 
 	err = clk_prepare_enable(dsi->clk_lp);
 	if (err < 0) {
-		dev_err(dev, "cannot enable low-power clock: %d\n", err);
+		DRM_DEV_ERROR(dev, "cannot enable low-power clock: %d\n", err);
 		goto disable_clk;
 	}
 
@@ -1673,7 +1685,7 @@ static int tegra_dsi_resume(struct device *dev)
 	if (dsi->rst) {
 		err = reset_control_deassert(dsi->rst);
 		if (err < 0) {
-			dev_err(dev, "cannot assert reset: %d\n", err);
+			DRM_DEV_ERROR(dev, "cannot assert reset: %d\n", err);
 			goto disable_clk_lp;
 		}
 	}

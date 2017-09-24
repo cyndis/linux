@@ -597,7 +597,7 @@ static int tegra_hdmi_setup_audio(struct tegra_hdmi *hdmi)
 	config = tegra_hdmi_get_audio_config(hdmi->audio_sample_rate,
 					     hdmi->pixel_clock);
 	if (!config) {
-		dev_err(hdmi->dev,
+		DRM_DEV_ERROR(hdmi->dev,
 			"cannot set audio to %u Hz at %u Hz pixel clock\n",
 			hdmi->audio_sample_rate, hdmi->pixel_clock);
 		return -EINVAL;
@@ -704,7 +704,7 @@ static void tegra_hdmi_write_infopack(struct tegra_hdmi *hdmi, const void *data,
 		break;
 
 	default:
-		dev_err(hdmi->dev, "unsupported infoframe type: %02x\n",
+		DRM_DEV_ERROR(hdmi->dev, "unsupported infoframe type: %02x\n",
 			ptr[0]);
 		return;
 	}
@@ -742,13 +742,15 @@ static void tegra_hdmi_setup_avi_infoframe(struct tegra_hdmi *hdmi,
 
 	err = drm_hdmi_avi_infoframe_from_display_mode(&frame, mode, false);
 	if (err < 0) {
-		dev_err(hdmi->dev, "failed to setup AVI infoframe: %zd\n", err);
+		DRM_DEV_ERROR(hdmi->dev,
+			"failed to setup AVI infoframe: %zd\n", err);
 		return;
 	}
 
 	err = hdmi_avi_infoframe_pack(&frame, buffer, sizeof(buffer));
 	if (err < 0) {
-		dev_err(hdmi->dev, "failed to pack AVI infoframe: %zd\n", err);
+		DRM_DEV_ERROR(hdmi->dev,
+			"failed to pack AVI infoframe: %zd\n", err);
 		return;
 	}
 
@@ -781,7 +783,8 @@ static void tegra_hdmi_setup_audio_infoframe(struct tegra_hdmi *hdmi)
 
 	err = hdmi_audio_infoframe_init(&frame);
 	if (err < 0) {
-		dev_err(hdmi->dev, "failed to setup audio infoframe: %zd\n",
+		DRM_DEV_ERROR(hdmi->dev,
+			"failed to setup audio infoframe: %zd\n",
 			err);
 		return;
 	}
@@ -790,7 +793,8 @@ static void tegra_hdmi_setup_audio_infoframe(struct tegra_hdmi *hdmi)
 
 	err = hdmi_audio_infoframe_pack(&frame, buffer, sizeof(buffer));
 	if (err < 0) {
-		dev_err(hdmi->dev, "failed to pack audio infoframe: %zd\n",
+		DRM_DEV_ERROR(hdmi->dev,
+			"failed to pack audio infoframe: %zd\n",
 			err);
 		return;
 	}
@@ -833,7 +837,8 @@ static void tegra_hdmi_setup_stereo_infoframe(struct tegra_hdmi *hdmi)
 
 	err = hdmi_vendor_infoframe_pack(&frame, buffer, sizeof(buffer));
 	if (err < 0) {
-		dev_err(hdmi->dev, "failed to pack vendor infoframe: %zd\n",
+		DRM_DEV_ERROR(hdmi->dev,
+			"failed to pack vendor infoframe: %zd\n",
 			err);
 		return;
 	}
@@ -1009,7 +1014,8 @@ static void tegra_hdmi_encoder_enable(struct drm_encoder *encoder)
 
 	err = clk_set_rate(hdmi->clk, hdmi->pixel_clock);
 	if (err < 0) {
-		dev_err(hdmi->dev, "failed to set HDMI clock frequency: %d\n",
+		DRM_DEV_ERROR(hdmi->dev,
+			"failed to set HDMI clock frequency: %d\n",
 			err);
 	}
 
@@ -1209,7 +1215,8 @@ tegra_hdmi_encoder_atomic_check(struct drm_encoder *encoder,
 	err = tegra_dc_state_setup_clock(dc, crtc_state, hdmi->clk_parent,
 					 pclk, 0);
 	if (err < 0) {
-		dev_err(output->dev, "failed to setup CRTC state: %d\n", err);
+		DRM_DEV_ERROR(output->dev,
+			"failed to setup CRTC state: %d\n", err);
 		return err;
 	}
 
@@ -1496,7 +1503,8 @@ static int tegra_hdmi_init(struct host1x_client *client)
 
 	err = tegra_output_init(drm, &hdmi->output);
 	if (err < 0) {
-		dev_err(client->dev, "failed to initialize output: %d\n", err);
+		DRM_DEV_ERROR(client->dev,
+			"failed to initialize output: %d\n", err);
 		return err;
 	}
 
@@ -1505,25 +1513,29 @@ static int tegra_hdmi_init(struct host1x_client *client)
 	if (IS_ENABLED(CONFIG_DEBUG_FS)) {
 		err = tegra_hdmi_debugfs_init(hdmi, drm->primary);
 		if (err < 0)
-			dev_err(client->dev, "debugfs setup failed: %d\n", err);
+			DRM_DEV_ERROR(client->dev,
+				"debugfs setup failed: %d\n", err);
 	}
 
 	err = regulator_enable(hdmi->hdmi);
 	if (err < 0) {
-		dev_err(client->dev, "failed to enable HDMI regulator: %d\n",
+		DRM_DEV_ERROR(client->dev,
+			"failed to enable HDMI regulator: %d\n",
 			err);
 		return err;
 	}
 
 	err = regulator_enable(hdmi->pll);
 	if (err < 0) {
-		dev_err(hdmi->dev, "failed to enable PLL regulator: %d\n", err);
+		DRM_DEV_ERROR(hdmi->dev,
+			"failed to enable PLL regulator: %d\n", err);
 		return err;
 	}
 
 	err = regulator_enable(hdmi->vdd);
 	if (err < 0) {
-		dev_err(hdmi->dev, "failed to enable VDD regulator: %d\n", err);
+		DRM_DEV_ERROR(hdmi->dev,
+			"failed to enable VDD regulator: %d\n", err);
 		return err;
 	}
 
@@ -1687,13 +1699,13 @@ static int tegra_hdmi_probe(struct platform_device *pdev)
 
 	hdmi->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(hdmi->clk)) {
-		dev_err(&pdev->dev, "failed to get clock\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to get clock\n");
 		return PTR_ERR(hdmi->clk);
 	}
 
 	hdmi->rst = devm_reset_control_get(&pdev->dev, "hdmi");
 	if (IS_ERR(hdmi->rst)) {
-		dev_err(&pdev->dev, "failed to get reset\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to get reset\n");
 		return PTR_ERR(hdmi->rst);
 	}
 
@@ -1703,25 +1715,25 @@ static int tegra_hdmi_probe(struct platform_device *pdev)
 
 	err = clk_set_parent(hdmi->clk, hdmi->clk_parent);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to setup clocks: %d\n", err);
+		DRM_DEV_ERROR(&pdev->dev, "failed to setup clocks: %d\n", err);
 		return err;
 	}
 
 	hdmi->hdmi = devm_regulator_get(&pdev->dev, "hdmi");
 	if (IS_ERR(hdmi->hdmi)) {
-		dev_err(&pdev->dev, "failed to get HDMI regulator\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to get HDMI regulator\n");
 		return PTR_ERR(hdmi->hdmi);
 	}
 
 	hdmi->pll = devm_regulator_get(&pdev->dev, "pll");
 	if (IS_ERR(hdmi->pll)) {
-		dev_err(&pdev->dev, "failed to get PLL regulator\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to get PLL regulator\n");
 		return PTR_ERR(hdmi->pll);
 	}
 
 	hdmi->vdd = devm_regulator_get(&pdev->dev, "vdd");
 	if (IS_ERR(hdmi->vdd)) {
-		dev_err(&pdev->dev, "failed to get VDD regulator\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to get VDD regulator\n");
 		return PTR_ERR(hdmi->vdd);
 	}
 
@@ -1745,7 +1757,7 @@ static int tegra_hdmi_probe(struct platform_device *pdev)
 	err = devm_request_irq(hdmi->dev, hdmi->irq, tegra_hdmi_irq, 0,
 			       dev_name(hdmi->dev), hdmi);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to request IRQ#%u: %d\n",
+		DRM_DEV_ERROR(&pdev->dev, "failed to request IRQ#%u: %d\n",
 			hdmi->irq, err);
 		return err;
 	}
@@ -1759,7 +1771,8 @@ static int tegra_hdmi_probe(struct platform_device *pdev)
 
 	err = host1x_client_register(&hdmi->client);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to register host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to register host1x client: %d\n",
 			err);
 		return err;
 	}
@@ -1776,7 +1789,8 @@ static int tegra_hdmi_remove(struct platform_device *pdev)
 
 	err = host1x_client_unregister(&hdmi->client);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to unregister host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to unregister host1x client: %d\n",
 			err);
 		return err;
 	}
@@ -1794,7 +1808,7 @@ static int tegra_hdmi_suspend(struct device *dev)
 
 	err = reset_control_assert(hdmi->rst);
 	if (err < 0) {
-		dev_err(dev, "failed to assert reset: %d\n", err);
+		DRM_DEV_ERROR(dev, "failed to assert reset: %d\n", err);
 		return err;
 	}
 
@@ -1812,7 +1826,7 @@ static int tegra_hdmi_resume(struct device *dev)
 
 	err = clk_prepare_enable(hdmi->clk);
 	if (err < 0) {
-		dev_err(dev, "failed to enable clock: %d\n", err);
+		DRM_DEV_ERROR(dev, "failed to enable clock: %d\n", err);
 		return err;
 	}
 
@@ -1820,7 +1834,7 @@ static int tegra_hdmi_resume(struct device *dev)
 
 	err = reset_control_deassert(hdmi->rst);
 	if (err < 0) {
-		dev_err(dev, "failed to deassert reset: %d\n", err);
+		DRM_DEV_ERROR(dev, "failed to deassert reset: %d\n", err);
 		clk_disable_unprepare(hdmi->clk);
 		return err;
 	}

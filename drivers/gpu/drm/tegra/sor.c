@@ -751,7 +751,7 @@ static int tegra_sor_compute_config(struct tegra_sor *sor,
 		config->tu_size = params.tu_size;
 	}
 
-	dev_dbg(sor->dev,
+	DRM_DEV_DEBUG(sor->dev,
 		"polarity: %d active count: %d tu size: %d active frac: %d\n",
 		config->active_polarity, config->active_count,
 		config->tu_size, config->active_frac);
@@ -766,12 +766,12 @@ static int tegra_sor_compute_config(struct tegra_sor *sor,
 
 	if (config->watermark > 30) {
 		config->watermark = 30;
-		dev_err(sor->dev,
+		DRM_DEV_ERROR(sor->dev,
 			"unable to compute TU size, forcing watermark to %u\n",
 			config->watermark);
 	} else if (config->watermark > num_syms_per_line) {
 		config->watermark = num_syms_per_line;
-		dev_err(sor->dev, "watermark too high, forcing to %u\n",
+		DRM_DEV_ERROR(sor->dev, "watermark too high, forcing to %u\n",
 			config->watermark);
 	}
 
@@ -789,7 +789,8 @@ static int tegra_sor_compute_config(struct tegra_sor *sor,
 	config->vblank_symbols = div_u64(num, pclk);
 	config->vblank_symbols -= 36 / link->num_lanes + 4;
 
-	dev_dbg(sor->dev, "blank symbols: H:%u V:%u\n", config->hblank_symbols,
+	DRM_DEV_DEBUG(sor->dev,
+		"blank symbols: H:%u V:%u\n", config->hblank_symbols,
 		config->vblank_symbols);
 
 	return 0;
@@ -999,7 +1000,8 @@ static int tegra_sor_power_down(struct tegra_sor *sor)
 	/* switch to safe parent clock */
 	err = tegra_sor_set_parent_clock(sor, sor->clk_safe);
 	if (err < 0)
-		dev_err(sor->dev, "failed to set safe parent clock: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to set safe parent clock: %d\n", err);
 
 	value = tegra_sor_readl(sor, SOR_DP_PADCTL0);
 	value &= ~(SOR_DP_PADCTL_PD_TXD_3 | SOR_DP_PADCTL_PD_TXD_0 |
@@ -1404,7 +1406,7 @@ static void tegra_sor_edp_disable(struct drm_encoder *encoder)
 
 	err = tegra_sor_detach(sor);
 	if (err < 0)
-		dev_err(sor->dev, "failed to detach SOR: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to detach SOR: %d\n", err);
 
 	tegra_sor_writel(sor, 0, SOR_STATE1);
 	tegra_sor_update(sor);
@@ -1423,17 +1425,19 @@ static void tegra_sor_edp_disable(struct drm_encoder *encoder)
 
 	err = tegra_sor_power_down(sor);
 	if (err < 0)
-		dev_err(sor->dev, "failed to power down SOR: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to power down SOR: %d\n", err);
 
 	if (sor->aux) {
 		err = drm_dp_aux_disable(sor->aux);
 		if (err < 0)
-			dev_err(sor->dev, "failed to disable DP: %d\n", err);
+			DRM_DEV_ERROR(sor->dev,
+				"failed to disable DP: %d\n", err);
 	}
 
 	err = tegra_io_rail_power_off(TEGRA_IO_RAIL_LVDS);
 	if (err < 0)
-		dev_err(sor->dev, "failed to power off I/O rail: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to power off I/O rail: %d\n", err);
 
 	if (output->panel)
 		drm_panel_unprepare(output->panel);
@@ -1506,25 +1510,27 @@ static void tegra_sor_edp_enable(struct drm_encoder *encoder)
 
 	err = drm_dp_aux_enable(sor->aux);
 	if (err < 0)
-		dev_err(sor->dev, "failed to enable DP: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to enable DP: %d\n", err);
 
 	err = drm_dp_link_probe(sor->aux, &link);
 	if (err < 0) {
-		dev_err(sor->dev, "failed to probe eDP link: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to probe eDP link: %d\n", err);
 		return;
 	}
 
 	/* switch to safe parent clock */
 	err = tegra_sor_set_parent_clock(sor, sor->clk_safe);
 	if (err < 0)
-		dev_err(sor->dev, "failed to set safe parent clock: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to set safe parent clock: %d\n", err);
 
 	memset(&config, 0, sizeof(config));
 	config.bits_per_pixel = state->bpc * 3;
 
 	err = tegra_sor_compute_config(sor, mode, &config, &link);
 	if (err < 0)
-		dev_err(sor->dev, "failed to compute configuration: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to compute configuration: %d\n", err);
 
 	value = tegra_sor_readl(sor, SOR_CLK_CNTRL);
 	value &= ~SOR_CLK_CNTRL_DP_CLK_SEL_MASK;
@@ -1593,7 +1599,8 @@ static void tegra_sor_edp_enable(struct drm_encoder *encoder)
 	/* step 2 */
 	err = tegra_io_rail_power_on(TEGRA_IO_RAIL_LVDS);
 	if (err < 0)
-		dev_err(sor->dev, "failed to power on I/O rail: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to power on I/O rail: %d\n", err);
 
 	usleep_range(5, 100);
 
@@ -1632,7 +1639,8 @@ static void tegra_sor_edp_enable(struct drm_encoder *encoder)
 	/* switch to DP parent clock */
 	err = tegra_sor_set_parent_clock(sor, sor->clk_dp);
 	if (err < 0)
-		dev_err(sor->dev, "failed to set parent clock: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to set parent clock: %d\n", err);
 
 	/* power DP lanes */
 	value = tegra_sor_readl(sor, SOR_DP_PADCTL0);
@@ -1702,15 +1710,18 @@ static void tegra_sor_edp_enable(struct drm_encoder *encoder)
 
 	err = drm_dp_link_probe(sor->aux, &link);
 	if (err < 0)
-		dev_err(sor->dev, "failed to probe eDP link: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to probe eDP link: %d\n", err);
 
 	err = drm_dp_link_power_up(sor->aux, &link);
 	if (err < 0)
-		dev_err(sor->dev, "failed to power up eDP link: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to power up eDP link: %d\n", err);
 
 	err = drm_dp_link_configure(sor->aux, &link);
 	if (err < 0)
-		dev_err(sor->dev, "failed to configure eDP link: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to configure eDP link: %d\n", err);
 
 	rate = drm_dp_link_rate_to_bw_code(link.rate);
 	lanes = link.num_lanes;
@@ -1742,13 +1753,14 @@ static void tegra_sor_edp_enable(struct drm_encoder *encoder)
 
 	err = tegra_sor_dp_train_fast(sor, &link);
 	if (err < 0)
-		dev_err(sor->dev, "DP fast link training failed: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"DP fast link training failed: %d\n", err);
 
-	dev_dbg(sor->dev, "fast link training succeeded\n");
+	DRM_DEV_DEBUG(sor->dev, "fast link training succeeded\n");
 
 	err = tegra_sor_power_up(sor, 250);
 	if (err < 0)
-		dev_err(sor->dev, "failed to power up SOR: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to power up SOR: %d\n", err);
 
 	/* CSTM (LVDS, link A/B, upper) */
 	value = SOR_CSTM_LVDS | SOR_CSTM_LINK_ACT_A | SOR_CSTM_LINK_ACT_B |
@@ -1766,7 +1778,7 @@ static void tegra_sor_edp_enable(struct drm_encoder *encoder)
 	/* PWM setup */
 	err = tegra_sor_setup_pwm(sor, 250);
 	if (err < 0)
-		dev_err(sor->dev, "failed to setup PWM: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to setup PWM: %d\n", err);
 
 	tegra_sor_update(sor);
 
@@ -1778,11 +1790,11 @@ static void tegra_sor_edp_enable(struct drm_encoder *encoder)
 
 	err = tegra_sor_attach(sor);
 	if (err < 0)
-		dev_err(sor->dev, "failed to attach SOR: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to attach SOR: %d\n", err);
 
 	err = tegra_sor_wakeup(sor);
 	if (err < 0)
-		dev_err(sor->dev, "failed to enable DC: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to enable DC: %d\n", err);
 
 	if (output->panel)
 		drm_panel_enable(output->panel);
@@ -1806,7 +1818,8 @@ tegra_sor_encoder_atomic_check(struct drm_encoder *encoder,
 	err = tegra_dc_state_setup_clock(dc, crtc_state, sor->clk_parent,
 					 pclk, 0);
 	if (err < 0) {
-		dev_err(output->dev, "failed to setup CRTC state: %d\n", err);
+		DRM_DEV_ERROR(output->dev,
+			"failed to setup CRTC state: %d\n", err);
 		return err;
 	}
 
@@ -1864,7 +1877,7 @@ static void tegra_sor_hdmi_write_infopack(struct tegra_sor *sor,
 		break;
 
 	default:
-		dev_err(sor->dev, "unsupported infoframe type: %02x\n",
+		DRM_DEV_ERROR(sor->dev, "unsupported infoframe type: %02x\n",
 			ptr[0]);
 		return;
 	}
@@ -1911,13 +1924,15 @@ tegra_sor_hdmi_setup_avi_infoframe(struct tegra_sor *sor,
 
 	err = drm_hdmi_avi_infoframe_from_display_mode(&frame, mode, false);
 	if (err < 0) {
-		dev_err(sor->dev, "failed to setup AVI infoframe: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to setup AVI infoframe: %d\n", err);
 		return err;
 	}
 
 	err = hdmi_avi_infoframe_pack(&frame, buffer, sizeof(buffer));
 	if (err < 0) {
-		dev_err(sor->dev, "failed to pack AVI infoframe: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to pack AVI infoframe: %d\n", err);
 		return err;
 	}
 
@@ -1963,7 +1978,7 @@ static void tegra_sor_hdmi_disable(struct drm_encoder *encoder)
 
 	err = tegra_sor_detach(sor);
 	if (err < 0)
-		dev_err(sor->dev, "failed to detach SOR: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to detach SOR: %d\n", err);
 
 	tegra_sor_writel(sor, 0, SOR_STATE1);
 	tegra_sor_update(sor);
@@ -1978,11 +1993,12 @@ static void tegra_sor_hdmi_disable(struct drm_encoder *encoder)
 
 	err = tegra_sor_power_down(sor);
 	if (err < 0)
-		dev_err(sor->dev, "failed to power down SOR: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to power down SOR: %d\n", err);
 
 	err = tegra_io_rail_power_off(TEGRA_IO_RAIL_HDMI);
 	if (err < 0)
-		dev_err(sor->dev, "failed to power off HDMI rail: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to power off HDMI rail: %d\n", err);
 
 	pm_runtime_put(sor->dev);
 }
@@ -2008,13 +2024,15 @@ static void tegra_sor_hdmi_enable(struct drm_encoder *encoder)
 	/* switch to safe parent clock */
 	err = tegra_sor_set_parent_clock(sor, sor->clk_safe);
 	if (err < 0)
-		dev_err(sor->dev, "failed to set safe parent clock: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to set safe parent clock: %d\n", err);
 
 	div = clk_get_rate(sor->clk) / 1000000 * 4;
 
 	err = tegra_io_rail_power_on(TEGRA_IO_RAIL_HDMI);
 	if (err < 0)
-		dev_err(sor->dev, "failed to power on HDMI rail: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to power on HDMI rail: %d\n", err);
 
 	usleep_range(20, 100);
 
@@ -2113,11 +2131,13 @@ static void tegra_sor_hdmi_enable(struct drm_encoder *encoder)
 	/* switch to parent clock */
 	err = clk_set_parent(sor->clk_src, sor->clk_parent);
 	if (err < 0)
-		dev_err(sor->dev, "failed to set source clock: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to set source clock: %d\n", err);
 
 	err = tegra_sor_set_parent_clock(sor, sor->clk_src);
 	if (err < 0)
-		dev_err(sor->dev, "failed to set parent clock: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to set parent clock: %d\n", err);
 
 	value = SOR_INPUT_CONTROL_HDMI_SRC_SELECT(dc->pipe);
 
@@ -2151,7 +2171,8 @@ static void tegra_sor_hdmi_enable(struct drm_encoder *encoder)
 	/* infoframe setup */
 	err = tegra_sor_hdmi_setup_avi_infoframe(sor, mode);
 	if (err < 0)
-		dev_err(sor->dev, "failed to setup AVI infoframe: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to setup AVI infoframe: %d\n", err);
 
 	/* XXX HDMI audio support not implemented yet */
 	tegra_sor_hdmi_disable_audio_infoframe(sor);
@@ -2170,7 +2191,7 @@ static void tegra_sor_hdmi_enable(struct drm_encoder *encoder)
 	/* production settings */
 	settings = tegra_sor_hdmi_find_settings(sor, mode->clock * 1000);
 	if (!settings) {
-		dev_err(sor->dev, "no settings for pixel clock %d Hz\n",
+		DRM_DEV_ERROR(sor->dev, "no settings for pixel clock %d Hz\n",
 			mode->clock * 1000);
 		return;
 	}
@@ -2244,7 +2265,7 @@ static void tegra_sor_hdmi_enable(struct drm_encoder *encoder)
 
 	err = tegra_sor_power_up(sor, 250);
 	if (err < 0)
-		dev_err(sor->dev, "failed to power up SOR: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to power up SOR: %d\n", err);
 
 	/* configure dynamic range of output */
 	value = tegra_sor_readl(sor, SOR_HEAD_STATE0(dc->pipe));
@@ -2264,7 +2285,7 @@ static void tegra_sor_hdmi_enable(struct drm_encoder *encoder)
 
 	err = tegra_sor_attach(sor);
 	if (err < 0)
-		dev_err(sor->dev, "failed to attach SOR: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to attach SOR: %d\n", err);
 
 	/* enable display to SOR clock and generate HDMI preamble */
 	value = tegra_dc_readl(dc, DC_DISP_DISP_WIN_OPTIONS);
@@ -2275,7 +2296,7 @@ static void tegra_sor_hdmi_enable(struct drm_encoder *encoder)
 
 	err = tegra_sor_wakeup(sor);
 	if (err < 0)
-		dev_err(sor->dev, "failed to wakeup SOR: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to wakeup SOR: %d\n", err);
 }
 
 static const struct drm_encoder_helper_funcs tegra_sor_hdmi_helpers = {
@@ -2332,7 +2353,8 @@ static int tegra_sor_init(struct host1x_client *client)
 
 	err = tegra_output_init(drm, &sor->output);
 	if (err < 0) {
-		dev_err(client->dev, "failed to initialize output: %d\n", err);
+		DRM_DEV_ERROR(client->dev,
+			"failed to initialize output: %d\n", err);
 		return err;
 	}
 
@@ -2341,13 +2363,15 @@ static int tegra_sor_init(struct host1x_client *client)
 	if (IS_ENABLED(CONFIG_DEBUG_FS)) {
 		err = tegra_sor_debugfs_init(sor, drm->primary);
 		if (err < 0)
-			dev_err(sor->dev, "debugfs setup failed: %d\n", err);
+			DRM_DEV_ERROR(sor->dev,
+				"debugfs setup failed: %d\n", err);
 	}
 
 	if (sor->aux) {
 		err = drm_dp_aux_attach(sor->aux, &sor->output);
 		if (err < 0) {
-			dev_err(sor->dev, "failed to attach DP: %d\n", err);
+			DRM_DEV_ERROR(sor->dev,
+				"failed to attach DP: %d\n", err);
 			return err;
 		}
 	}
@@ -2359,7 +2383,8 @@ static int tegra_sor_init(struct host1x_client *client)
 	if (sor->rst) {
 		err = reset_control_assert(sor->rst);
 		if (err < 0) {
-			dev_err(sor->dev, "failed to assert SOR reset: %d\n",
+			DRM_DEV_ERROR(sor->dev,
+				"failed to assert SOR reset: %d\n",
 				err);
 			return err;
 		}
@@ -2367,7 +2392,7 @@ static int tegra_sor_init(struct host1x_client *client)
 
 	err = clk_prepare_enable(sor->clk);
 	if (err < 0) {
-		dev_err(sor->dev, "failed to enable clock: %d\n", err);
+		DRM_DEV_ERROR(sor->dev, "failed to enable clock: %d\n", err);
 		return err;
 	}
 
@@ -2376,7 +2401,8 @@ static int tegra_sor_init(struct host1x_client *client)
 	if (sor->rst) {
 		err = reset_control_deassert(sor->rst);
 		if (err < 0) {
-			dev_err(sor->dev, "failed to deassert SOR reset: %d\n",
+			DRM_DEV_ERROR(sor->dev,
+				"failed to deassert SOR reset: %d\n",
 				err);
 			return err;
 		}
@@ -2403,7 +2429,8 @@ static int tegra_sor_exit(struct host1x_client *client)
 	if (sor->aux) {
 		err = drm_dp_aux_detach(sor->aux);
 		if (err < 0) {
-			dev_err(sor->dev, "failed to detach DP: %d\n", err);
+			DRM_DEV_ERROR(sor->dev,
+				"failed to detach DP: %d\n", err);
 			return err;
 		}
 	}
@@ -2433,42 +2460,44 @@ static int tegra_sor_hdmi_probe(struct tegra_sor *sor)
 
 	sor->avdd_io_supply = devm_regulator_get(sor->dev, "avdd-io");
 	if (IS_ERR(sor->avdd_io_supply)) {
-		dev_err(sor->dev, "cannot get AVDD I/O supply: %ld\n",
+		DRM_DEV_ERROR(sor->dev, "cannot get AVDD I/O supply: %ld\n",
 			PTR_ERR(sor->avdd_io_supply));
 		return PTR_ERR(sor->avdd_io_supply);
 	}
 
 	err = regulator_enable(sor->avdd_io_supply);
 	if (err < 0) {
-		dev_err(sor->dev, "failed to enable AVDD I/O supply: %d\n",
+		DRM_DEV_ERROR(sor->dev,
+			"failed to enable AVDD I/O supply: %d\n",
 			err);
 		return err;
 	}
 
 	sor->vdd_pll_supply = devm_regulator_get(sor->dev, "vdd-pll");
 	if (IS_ERR(sor->vdd_pll_supply)) {
-		dev_err(sor->dev, "cannot get VDD PLL supply: %ld\n",
+		DRM_DEV_ERROR(sor->dev, "cannot get VDD PLL supply: %ld\n",
 			PTR_ERR(sor->vdd_pll_supply));
 		return PTR_ERR(sor->vdd_pll_supply);
 	}
 
 	err = regulator_enable(sor->vdd_pll_supply);
 	if (err < 0) {
-		dev_err(sor->dev, "failed to enable VDD PLL supply: %d\n",
+		DRM_DEV_ERROR(sor->dev, "failed to enable VDD PLL supply: %d\n",
 			err);
 		return err;
 	}
 
 	sor->hdmi_supply = devm_regulator_get(sor->dev, "hdmi");
 	if (IS_ERR(sor->hdmi_supply)) {
-		dev_err(sor->dev, "cannot get HDMI supply: %ld\n",
+		DRM_DEV_ERROR(sor->dev, "cannot get HDMI supply: %ld\n",
 			PTR_ERR(sor->hdmi_supply));
 		return PTR_ERR(sor->hdmi_supply);
 	}
 
 	err = regulator_enable(sor->hdmi_supply);
 	if (err < 0) {
-		dev_err(sor->dev, "failed to enable HDMI supply: %d\n", err);
+		DRM_DEV_ERROR(sor->dev,
+			"failed to enable HDMI supply: %d\n", err);
 		return err;
 	}
 
@@ -2573,34 +2602,35 @@ static int tegra_sor_probe(struct platform_device *pdev)
 		if (sor->soc->supports_hdmi) {
 			sor->ops = &tegra_sor_hdmi_ops;
 		} else if (sor->soc->supports_lvds) {
-			dev_err(&pdev->dev, "LVDS not supported yet\n");
+			DRM_DEV_ERROR(&pdev->dev, "LVDS not supported yet\n");
 			return -ENODEV;
 		} else {
-			dev_err(&pdev->dev, "unknown (non-DP) support\n");
+			DRM_DEV_ERROR(&pdev->dev, "unknown (non-DP) support\n");
 			return -ENODEV;
 		}
 	} else {
 		if (sor->soc->supports_edp) {
 			sor->ops = &tegra_sor_edp_ops;
 		} else if (sor->soc->supports_dp) {
-			dev_err(&pdev->dev, "DisplayPort not supported yet\n");
+			DRM_DEV_ERROR(&pdev->dev,
+				"DisplayPort not supported yet\n");
 			return -ENODEV;
 		} else {
-			dev_err(&pdev->dev, "unknown (DP) support\n");
+			DRM_DEV_ERROR(&pdev->dev, "unknown (DP) support\n");
 			return -ENODEV;
 		}
 	}
 
 	err = tegra_output_probe(&sor->output);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to probe output: %d\n", err);
+		DRM_DEV_ERROR(&pdev->dev, "failed to probe output: %d\n", err);
 		return err;
 	}
 
 	if (sor->ops && sor->ops->probe) {
 		err = sor->ops->probe(sor);
 		if (err < 0) {
-			dev_err(&pdev->dev, "failed to probe %s: %d\n",
+			DRM_DEV_ERROR(&pdev->dev, "failed to probe %s: %d\n",
 				sor->ops->name, err);
 			goto output;
 		}
@@ -2617,7 +2647,8 @@ static int tegra_sor_probe(struct platform_device *pdev)
 		sor->rst = devm_reset_control_get(&pdev->dev, "sor");
 		if (IS_ERR(sor->rst)) {
 			err = PTR_ERR(sor->rst);
-			dev_err(&pdev->dev, "failed to get reset control: %d\n",
+			DRM_DEV_ERROR(&pdev->dev,
+				"failed to get reset control: %d\n",
 				err);
 			goto remove;
 		}
@@ -2626,7 +2657,8 @@ static int tegra_sor_probe(struct platform_device *pdev)
 	sor->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(sor->clk)) {
 		err = PTR_ERR(sor->clk);
-		dev_err(&pdev->dev, "failed to get module clock: %d\n", err);
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to get module clock: %d\n", err);
 		goto remove;
 	}
 
@@ -2634,7 +2666,8 @@ static int tegra_sor_probe(struct platform_device *pdev)
 		sor->clk_src = devm_clk_get(&pdev->dev, "source");
 		if (IS_ERR(sor->clk_src)) {
 			err = PTR_ERR(sor->clk_src);
-			dev_err(sor->dev, "failed to get source clock: %d\n",
+			DRM_DEV_ERROR(sor->dev,
+				"failed to get source clock: %d\n",
 				err);
 			goto remove;
 		}
@@ -2643,21 +2676,23 @@ static int tegra_sor_probe(struct platform_device *pdev)
 	sor->clk_parent = devm_clk_get(&pdev->dev, "parent");
 	if (IS_ERR(sor->clk_parent)) {
 		err = PTR_ERR(sor->clk_parent);
-		dev_err(&pdev->dev, "failed to get parent clock: %d\n", err);
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to get parent clock: %d\n", err);
 		goto remove;
 	}
 
 	sor->clk_safe = devm_clk_get(&pdev->dev, "safe");
 	if (IS_ERR(sor->clk_safe)) {
 		err = PTR_ERR(sor->clk_safe);
-		dev_err(&pdev->dev, "failed to get safe clock: %d\n", err);
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to get safe clock: %d\n", err);
 		goto remove;
 	}
 
 	sor->clk_dp = devm_clk_get(&pdev->dev, "dp");
 	if (IS_ERR(sor->clk_dp)) {
 		err = PTR_ERR(sor->clk_dp);
-		dev_err(&pdev->dev, "failed to get DP clock: %d\n", err);
+		DRM_DEV_ERROR(&pdev->dev, "failed to get DP clock: %d\n", err);
 		goto remove;
 	}
 
@@ -2670,7 +2705,8 @@ static int tegra_sor_probe(struct platform_device *pdev)
 
 	if (IS_ERR(sor->clk_brick)) {
 		err = PTR_ERR(sor->clk_brick);
-		dev_err(&pdev->dev, "failed to register SOR clock: %d\n", err);
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to register SOR clock: %d\n", err);
 		goto remove;
 	}
 
@@ -2680,7 +2716,8 @@ static int tegra_sor_probe(struct platform_device *pdev)
 
 	err = host1x_client_register(&sor->client);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to register host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to register host1x client: %d\n",
 			err);
 		goto remove;
 	}
@@ -2704,7 +2741,8 @@ static int tegra_sor_remove(struct platform_device *pdev)
 
 	err = host1x_client_unregister(&sor->client);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to unregister host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to unregister host1x client: %d\n",
 			err);
 		return err;
 	}
@@ -2712,7 +2750,8 @@ static int tegra_sor_remove(struct platform_device *pdev)
 	if (sor->ops && sor->ops->remove) {
 		err = sor->ops->remove(sor);
 		if (err < 0)
-			dev_err(&pdev->dev, "failed to remove SOR: %d\n", err);
+			DRM_DEV_ERROR(&pdev->dev,
+				"failed to remove SOR: %d\n", err);
 	}
 
 	tegra_output_remove(&sor->output);
@@ -2729,7 +2768,7 @@ static int tegra_sor_suspend(struct device *dev)
 	if (sor->rst) {
 		err = reset_control_assert(sor->rst);
 		if (err < 0) {
-			dev_err(dev, "failed to assert reset: %d\n", err);
+			DRM_DEV_ERROR(dev, "failed to assert reset: %d\n", err);
 			return err;
 		}
 	}
@@ -2748,7 +2787,7 @@ static int tegra_sor_resume(struct device *dev)
 
 	err = clk_prepare_enable(sor->clk);
 	if (err < 0) {
-		dev_err(dev, "failed to enable clock: %d\n", err);
+		DRM_DEV_ERROR(dev, "failed to enable clock: %d\n", err);
 		return err;
 	}
 
@@ -2757,7 +2796,8 @@ static int tegra_sor_resume(struct device *dev)
 	if (sor->rst) {
 		err = reset_control_deassert(sor->rst);
 		if (err < 0) {
-			dev_err(dev, "failed to deassert reset: %d\n", err);
+			DRM_DEV_ERROR(dev,
+				"failed to deassert reset: %d\n", err);
 			clk_disable_unprepare(sor->clk);
 			return err;
 		}

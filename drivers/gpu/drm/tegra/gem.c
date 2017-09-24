@@ -128,7 +128,8 @@ static int tegra_bo_iommu_map(struct tegra_drm *tegra, struct tegra_bo *bo)
 	err = drm_mm_insert_node_generic(&tegra->mm,
 					 bo->mm, bo->gem.size, PAGE_SIZE, 0, 0);
 	if (err < 0) {
-		dev_err(tegra->drm->dev, "out of I/O virtual memory: %zd\n",
+		DRM_DEV_ERROR(tegra->drm->dev,
+			"out of I/O virtual memory: %zd\n",
 			err);
 		goto unlock;
 	}
@@ -138,7 +139,8 @@ static int tegra_bo_iommu_map(struct tegra_drm *tegra, struct tegra_bo *bo)
 	err = iommu_map_sg(tegra->domain, bo->paddr, bo->sgt->sgl,
 			   bo->sgt->nents, prot);
 	if (err < 0) {
-		dev_err(tegra->drm->dev, "failed to map buffer: %zd\n", err);
+		DRM_DEV_ERROR(tegra->drm->dev,
+			"failed to map buffer: %zd\n", err);
 		goto remove;
 	}
 
@@ -268,7 +270,7 @@ static int tegra_bo_alloc(struct drm_device *drm, struct tegra_bo *bo)
 		bo->vaddr = dma_alloc_wc(drm->dev, size, &bo->paddr,
 					 GFP_KERNEL | __GFP_NOWARN);
 		if (!bo->vaddr) {
-			dev_err(drm->dev,
+			DRM_DEV_ERROR(drm->dev,
 				"failed to allocate buffer of size %zu\n",
 				size);
 			return -ENOMEM;

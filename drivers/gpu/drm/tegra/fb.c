@@ -138,7 +138,8 @@ static struct tegra_fb *tegra_fb_alloc(struct drm_device *drm,
 
 	err = drm_framebuffer_init(drm, &fb->base, &tegra_fb_funcs);
 	if (err < 0) {
-		dev_err(drm->dev, "failed to initialize framebuffer: %d\n",
+		DRM_DEV_ERROR(drm->dev,
+			"failed to initialize framebuffer: %d\n",
 			err);
 		kfree(fb->planes);
 		kfree(fb);
@@ -241,7 +242,8 @@ static int tegra_fbdev_probe(struct drm_fb_helper *helper,
 
 	info = drm_fb_helper_alloc_fbi(helper);
 	if (IS_ERR(info)) {
-		dev_err(drm->dev, "failed to allocate framebuffer info\n");
+		DRM_DEV_ERROR(drm->dev,
+			"failed to allocate framebuffer info\n");
 		drm_gem_object_put_unlocked(&bo->gem);
 		return PTR_ERR(info);
 	}
@@ -249,7 +251,8 @@ static int tegra_fbdev_probe(struct drm_fb_helper *helper,
 	fbdev->fb = tegra_fb_alloc(drm, &cmd, &bo, 1);
 	if (IS_ERR(fbdev->fb)) {
 		err = PTR_ERR(fbdev->fb);
-		dev_err(drm->dev, "failed to allocate DRM framebuffer: %d\n",
+		DRM_DEV_ERROR(drm->dev,
+			"failed to allocate DRM framebuffer: %d\n",
 			err);
 		drm_gem_object_put_unlocked(&bo->gem);
 		return PTR_ERR(fbdev->fb);
@@ -273,7 +276,8 @@ static int tegra_fbdev_probe(struct drm_fb_helper *helper,
 		bo->vaddr = vmap(bo->pages, bo->num_pages, VM_MAP,
 				 pgprot_writecombine(PAGE_KERNEL));
 		if (!bo->vaddr) {
-			dev_err(drm->dev, "failed to vmap() framebuffer\n");
+			DRM_DEV_ERROR(drm->dev,
+				"failed to vmap() framebuffer\n");
 			err = -ENOMEM;
 			goto destroy;
 		}
@@ -302,7 +306,7 @@ static struct tegra_fbdev *tegra_fbdev_create(struct drm_device *drm)
 
 	fbdev = kzalloc(sizeof(*fbdev), GFP_KERNEL);
 	if (!fbdev) {
-		dev_err(drm->dev, "failed to allocate DRM fbdev\n");
+		DRM_DEV_ERROR(drm->dev, "failed to allocate DRM fbdev\n");
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -326,20 +330,22 @@ static int tegra_fbdev_init(struct tegra_fbdev *fbdev,
 
 	err = drm_fb_helper_init(drm, &fbdev->base, max_connectors);
 	if (err < 0) {
-		dev_err(drm->dev, "failed to initialize DRM FB helper: %d\n",
+		DRM_DEV_ERROR(drm->dev,
+			"failed to initialize DRM FB helper: %d\n",
 			err);
 		return err;
 	}
 
 	err = drm_fb_helper_single_add_all_connectors(&fbdev->base);
 	if (err < 0) {
-		dev_err(drm->dev, "failed to add connectors: %d\n", err);
+		DRM_DEV_ERROR(drm->dev, "failed to add connectors: %d\n", err);
 		goto fini;
 	}
 
 	err = drm_fb_helper_initial_config(&fbdev->base, preferred_bpp);
 	if (err < 0) {
-		dev_err(drm->dev, "failed to set initial configuration: %d\n",
+		DRM_DEV_ERROR(drm->dev,
+			"failed to set initial configuration: %d\n",
 			err);
 		goto fini;
 	}

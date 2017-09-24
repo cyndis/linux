@@ -446,14 +446,14 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 
 	dpaux->irq = platform_get_irq(pdev, 0);
 	if (dpaux->irq < 0) {
-		dev_err(&pdev->dev, "failed to get IRQ\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to get IRQ\n");
 		return -ENXIO;
 	}
 
 	if (!pdev->dev.pm_domain) {
 		dpaux->rst = devm_reset_control_get(&pdev->dev, "dpaux");
 		if (IS_ERR(dpaux->rst)) {
-			dev_err(&pdev->dev,
+			DRM_DEV_ERROR(&pdev->dev,
 				"failed to get reset control: %ld\n",
 				PTR_ERR(dpaux->rst));
 			return PTR_ERR(dpaux->rst);
@@ -462,14 +462,14 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 
 	dpaux->clk = devm_clk_get(&pdev->dev, NULL);
 	if (IS_ERR(dpaux->clk)) {
-		dev_err(&pdev->dev, "failed to get module clock: %ld\n",
+		DRM_DEV_ERROR(&pdev->dev, "failed to get module clock: %ld\n",
 			PTR_ERR(dpaux->clk));
 		return PTR_ERR(dpaux->clk);
 	}
 
 	err = clk_prepare_enable(dpaux->clk);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to enable module clock: %d\n",
+		DRM_DEV_ERROR(&pdev->dev, "failed to enable module clock: %d\n",
 			err);
 		return err;
 	}
@@ -479,7 +479,7 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 
 	dpaux->clk_parent = devm_clk_get(&pdev->dev, "parent");
 	if (IS_ERR(dpaux->clk_parent)) {
-		dev_err(&pdev->dev, "failed to get parent clock: %ld\n",
+		DRM_DEV_ERROR(&pdev->dev, "failed to get parent clock: %ld\n",
 			PTR_ERR(dpaux->clk_parent));
 		err = PTR_ERR(dpaux->clk_parent);
 		goto assert_reset;
@@ -487,21 +487,22 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 
 	err = clk_prepare_enable(dpaux->clk_parent);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to enable parent clock: %d\n",
+		DRM_DEV_ERROR(&pdev->dev, "failed to enable parent clock: %d\n",
 			err);
 		goto assert_reset;
 	}
 
 	err = clk_set_rate(dpaux->clk_parent, 270000000);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to set clock to 270 MHz: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to set clock to 270 MHz: %d\n",
 			err);
 		goto disable_parent_clk;
 	}
 
 	dpaux->vdd = devm_regulator_get(&pdev->dev, "vdd");
 	if (IS_ERR(dpaux->vdd)) {
-		dev_err(&pdev->dev, "failed to get VDD supply: %ld\n",
+		DRM_DEV_ERROR(&pdev->dev, "failed to get VDD supply: %ld\n",
 			PTR_ERR(dpaux->vdd));
 		err = PTR_ERR(dpaux->vdd);
 		goto disable_parent_clk;
@@ -510,7 +511,7 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 	err = devm_request_irq(dpaux->dev, dpaux->irq, tegra_dpaux_irq, 0,
 			       dev_name(dpaux->dev), dpaux);
 	if (err < 0) {
-		dev_err(dpaux->dev, "failed to request IRQ#%u: %d\n",
+		DRM_DEV_ERROR(dpaux->dev, "failed to request IRQ#%u: %d\n",
 			dpaux->irq, err);
 		goto disable_parent_clk;
 	}
@@ -546,7 +547,7 @@ static int tegra_dpaux_probe(struct platform_device *pdev)
 
 	dpaux->pinctrl = devm_pinctrl_register(&pdev->dev, &dpaux->desc, dpaux);
 	if (IS_ERR(dpaux->pinctrl)) {
-		dev_err(&pdev->dev, "failed to register pincontrol\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to register pincontrol\n");
 		return PTR_ERR(dpaux->pinctrl);
 	}
 #endif
@@ -779,7 +780,8 @@ int drm_dp_aux_train(struct drm_dp_aux *aux, struct drm_dp_link *link,
 		break;
 
 	default:
-		dev_err(aux->dev, "unsupported training pattern %u\n", tp);
+		DRM_DEV_ERROR(aux->dev,
+			"unsupported training pattern %u\n", tp);
 		return -EINVAL;
 	}
 

@@ -201,7 +201,8 @@ tegra_rgb_encoder_atomic_check(struct drm_encoder *encoder,
 	err = tegra_dc_state_setup_clock(dc, crtc_state, rgb->clk_parent,
 					 pclk, div);
 	if (err < 0) {
-		dev_err(output->dev, "failed to setup CRTC state: %d\n", err);
+		DRM_DEV_ERROR(output->dev,
+			"failed to setup CRTC state: %d\n", err);
 		return err;
 	}
 
@@ -238,19 +239,19 @@ int tegra_dc_rgb_probe(struct tegra_dc *dc)
 
 	rgb->clk = devm_clk_get(dc->dev, NULL);
 	if (IS_ERR(rgb->clk)) {
-		dev_err(dc->dev, "failed to get clock\n");
+		DRM_DEV_ERROR(dc->dev, "failed to get clock\n");
 		return PTR_ERR(rgb->clk);
 	}
 
 	rgb->clk_parent = devm_clk_get(dc->dev, "parent");
 	if (IS_ERR(rgb->clk_parent)) {
-		dev_err(dc->dev, "failed to get parent clock\n");
+		DRM_DEV_ERROR(dc->dev, "failed to get parent clock\n");
 		return PTR_ERR(rgb->clk_parent);
 	}
 
 	err = clk_set_parent(rgb->clk, rgb->clk_parent);
 	if (err < 0) {
-		dev_err(dc->dev, "failed to set parent clock: %d\n", err);
+		DRM_DEV_ERROR(dc->dev, "failed to set parent clock: %d\n", err);
 		return err;
 	}
 
@@ -295,7 +296,8 @@ int tegra_dc_rgb_init(struct drm_device *drm, struct tegra_dc *dc)
 
 	err = tegra_output_init(drm, output);
 	if (err < 0) {
-		dev_err(output->dev, "failed to initialize output: %d\n", err);
+		DRM_DEV_ERROR(output->dev,
+			"failed to initialize output: %d\n", err);
 		return err;
 	}
 

@@ -132,13 +132,14 @@ int tegra_output_probe(struct tegra_output *output)
 		err = gpio_request_one(output->hpd_gpio, GPIOF_DIR_IN,
 				       "HDMI hotplug detect");
 		if (err < 0) {
-			dev_err(output->dev, "gpio_request_one(): %d\n", err);
+			DRM_DEV_ERROR(output->dev,
+				"gpio_request_one(): %d\n", err);
 			return err;
 		}
 
 		err = gpio_to_irq(output->hpd_gpio);
 		if (err < 0) {
-			dev_err(output->dev, "gpio_to_irq(): %d\n", err);
+			DRM_DEV_ERROR(output->dev, "gpio_to_irq(): %d\n", err);
 			gpio_free(output->hpd_gpio);
 			return err;
 		}
@@ -151,7 +152,8 @@ int tegra_output_probe(struct tegra_output *output)
 		err = request_threaded_irq(output->hpd_irq, NULL, hpd_irq,
 					   flags, "hpd", output);
 		if (err < 0) {
-			dev_err(output->dev, "failed to request IRQ#%u: %d\n",
+			DRM_DEV_ERROR(output->dev,
+				"failed to request IRQ#%u: %d\n",
 				output->hpd_irq, err);
 			gpio_free(output->hpd_gpio);
 			return err;

@@ -75,7 +75,7 @@ static void falcon_copy_firmware_image(struct falcon *falcon,
 			       falcon->firmware.size, DMA_TO_DEVICE);
 	err = dma_mapping_error(falcon->dev, daddr);
 	if (err) {
-		dev_err(falcon->dev, "failed to map firmware: %d\n", err);
+		DRM_DEV_ERROR(falcon->dev, "failed to map firmware: %d\n", err);
 		return;
 	}
 	dma_sync_single_for_device(falcon->dev, daddr,
@@ -91,19 +91,20 @@ static int falcon_parse_firmware_image(struct falcon *falcon)
 
 	/* endian problems would show up right here */
 	if (bin->magic != PCI_VENDOR_ID_NVIDIA) {
-		dev_err(falcon->dev, "incorrect firmware magic\n");
+		DRM_DEV_ERROR(falcon->dev, "incorrect firmware magic\n");
 		return -EINVAL;
 	}
 
 	/* currently only version 1 is supported */
 	if (bin->version != 1) {
-		dev_err(falcon->dev, "unsupported firmware version\n");
+		DRM_DEV_ERROR(falcon->dev, "unsupported firmware version\n");
 		return -EINVAL;
 	}
 
 	/* check that the firmware size is consistent */
 	if (bin->size > falcon->firmware.size) {
-		dev_err(falcon->dev, "firmware image size inconsistency\n");
+		DRM_DEV_ERROR(falcon->dev,
+			"firmware image size inconsistency\n");
 		return -EINVAL;
 	}
 
@@ -142,7 +143,7 @@ int falcon_load_firmware(struct falcon *falcon)
 	falcon->firmware.vaddr = falcon->ops->alloc(falcon, firmware->size,
 						    &falcon->firmware.paddr);
 	if (!falcon->firmware.vaddr) {
-		dev_err(falcon->dev, "dma memory mapping failed\n");
+		DRM_DEV_ERROR(falcon->dev, "dma memory mapping failed\n");
 		return -ENOMEM;
 	}
 
@@ -152,7 +153,7 @@ int falcon_load_firmware(struct falcon *falcon)
 	/* parse the image data */
 	err = falcon_parse_firmware_image(falcon);
 	if (err < 0) {
-		dev_err(falcon->dev, "failed to parse firmware image\n");
+		DRM_DEV_ERROR(falcon->dev, "failed to parse firmware image\n");
 		goto err_setup_firmware_image;
 	}
 
@@ -245,7 +246,8 @@ int falcon_boot(struct falcon *falcon)
 
 	err = falcon_wait_idle(falcon);
 	if (err < 0) {
-		dev_err(falcon->dev, "Falcon boot failed due to timeout\n");
+		DRM_DEV_ERROR(falcon->dev,
+			"Falcon boot failed due to timeout\n");
 		return err;
 	}
 

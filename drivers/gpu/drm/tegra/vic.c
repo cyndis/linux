@@ -104,7 +104,7 @@ static int vic_boot(struct vic *vic)
 
 	err = falcon_wait_idle(&vic->falcon);
 	if (err < 0) {
-		dev_err(vic->dev,
+		DRM_DEV_ERROR(vic->dev,
 			"failed to set application ID and FCE base\n");
 		return err;
 	}
@@ -146,7 +146,8 @@ static int vic_init(struct host1x_client *client)
 	if (tegra->domain) {
 		err = iommu_attach_device(tegra->domain, vic->dev);
 		if (err < 0) {
-			dev_err(vic->dev, "failed to attach to domain: %d\n",
+			DRM_DEV_ERROR(vic->dev,
+				"failed to attach to domain: %d\n",
 				err);
 			return err;
 		}
@@ -306,7 +307,7 @@ static int vic_probe(struct platform_device *pdev)
 
 	regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!regs) {
-		dev_err(&pdev->dev, "failed to get registers\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to get registers\n");
 		return -ENXIO;
 	}
 
@@ -316,7 +317,7 @@ static int vic_probe(struct platform_device *pdev)
 
 	vic->clk = devm_clk_get(dev, NULL);
 	if (IS_ERR(vic->clk)) {
-		dev_err(&pdev->dev, "failed to get clock\n");
+		DRM_DEV_ERROR(&pdev->dev, "failed to get clock\n");
 		return PTR_ERR(vic->clk);
 	}
 
@@ -348,7 +349,8 @@ static int vic_probe(struct platform_device *pdev)
 
 	err = host1x_client_register(&vic->client.base);
 	if (err < 0) {
-		dev_err(dev, "failed to register host1x client: %d\n", err);
+		DRM_DEV_ERROR(dev,
+			"failed to register host1x client: %d\n", err);
 		platform_set_drvdata(pdev, NULL);
 		goto exit_falcon;
 	}
@@ -377,7 +379,8 @@ static int vic_remove(struct platform_device *pdev)
 
 	err = host1x_client_unregister(&vic->client.base);
 	if (err < 0) {
-		dev_err(&pdev->dev, "failed to unregister host1x client: %d\n",
+		DRM_DEV_ERROR(&pdev->dev,
+			"failed to unregister host1x client: %d\n",
 			err);
 		return err;
 	}
