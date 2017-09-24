@@ -314,6 +314,13 @@
 						regulator-name = "VDDIO_SDMMC3_AP";
 						regulator-min-microvolt = <2800000>;
 						regulator-max-microvolt = <2800000>;
+						regulator-always-on;
+						regulator-boot-on;
+					};
+
+					ldo6 {
+						regulator-always-on;
+						regulator-boot-on;
 					};
 
 					avdd_1v05: ldo7 {

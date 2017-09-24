@@ -269,14 +269,15 @@ static int tegra_ahci_power_on(struct ahci_host_priv *hpriv)
 				    tegra->supplies);
 	if (ret)
 		return ret;
-
+/*
 	ret = tegra_powergate_sequence_power_up(TEGRA_POWERGATE_SATA,
 						tegra->sata_clk,
 						tegra->sata_rst);
 	if (ret)
 		goto disable_regulators;
-
-	reset_control_assert(tegra->sata_oob_rst);
+*/
+	if (tegra->sata_oob_rst)
+		reset_control_assert(tegra->sata_oob_rst);
 	reset_control_assert(tegra->sata_cold_rst);
 
 	ret = ahci_platform_enable_resources(hpriv);
@@ -284,14 +285,15 @@ static int tegra_ahci_power_on(struct ahci_host_priv *hpriv)
 		goto disable_power;
 
 	reset_control_deassert(tegra->sata_cold_rst);
-	reset_control_deassert(tegra->sata_oob_rst);
+	if (tegra->sata_oob_rst)
+		reset_control_deassert(tegra->sata_oob_rst);
 
 	return 0;
 
 disable_power:
 	clk_disable_unprepare(tegra->sata_clk);
 
-	tegra_powergate_power_off(TEGRA_POWERGATE_SATA);
+//	tegra_powergate_power_off(TEGRA_POWERGATE_SATA);
 
 disable_regulators:
 	regulator_bulk_disable(tegra->soc_data->num_supplies, tegra->supplies);
@@ -305,11 +307,11 @@ static void tegra_ahci_power_off(struct ahci_host_priv *hpriv)
 	ahci_platform_disable_resources(hpriv);
 
 	reset_control_assert(tegra->sata_rst);
-	reset_control_assert(tegra->sata_oob_rst);
+//	reset_control_assert(tegra->sata_oob_rst);
 	reset_control_assert(tegra->sata_cold_rst);
 
 	clk_disable_unprepare(tegra->sata_clk);
-	tegra_powergate_power_off(TEGRA_POWERGATE_SATA);
+//	tegra_powergate_power_off(TEGRA_POWERGATE_SATA);
 
 	regulator_bulk_disable(tegra->soc_data->num_supplies, tegra->supplies);
 }
@@ -533,18 +535,21 @@ static int tegra_ahci_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to get sata reset\n");
 		return PTR_ERR(tegra->sata_rst);
 	}
-
+/*
 	tegra->sata_oob_rst = devm_reset_control_get(&pdev->dev, "sata-oob");
 	if (IS_ERR(tegra->sata_oob_rst)) {
 		dev_err(&pdev->dev, "Failed to get sata-oob reset\n");
 		return PTR_ERR(tegra->sata_oob_rst);
 	}
-
+*/
 	tegra->sata_cold_rst = devm_reset_control_get(&pdev->dev, "sata-cold");
 	if (IS_ERR(tegra->sata_cold_rst)) {
 		dev_err(&pdev->dev, "Failed to get sata-cold reset\n");
 		return PTR_ERR(tegra->sata_cold_rst);
 	}
+
+	struct clk *uphy = devm_clk_get(&pdev->dev, "pllp-uphy");
+	clk_prepare_enable(uphy);
 
 	tegra->sata_clk = devm_clk_get(&pdev->dev, "sata");
 	if (IS_ERR(tegra->sata_clk)) {

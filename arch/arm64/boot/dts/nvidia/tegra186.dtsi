@@ -257,6 +257,22 @@
 		status = "disabled";
 	};
 
+	sata: sata@3507000 {
+		compatible = "nvidia,tegra210-ahci";
+		reg = <0x0 0x03507000 0x0 0x2000>,  /* AHCI */
+		      <0x0 0x03500000 0x0 0x7000>,  /* SATA */
+		      <0x0 0x03a90000 0x0 0x10000>; /* SATA AUX */
+		interrupts = <GIC_SPI 197 IRQ_TYPE_LEVEL_HIGH>;
+		clocks = <&bpmp TEGRA186_CLK_SATA>,
+		         <&bpmp TEGRA186_CLK_SATA_OOB>,
+		         <&bpmp TEGRA186_CLK_PLLP_OUT0>;
+		clock-names = "sata", "sata-oob", "pllp-uphy";
+		resets = <&bpmp TEGRA186_RESET_SATA>,
+		         <&bpmp TEGRA186_RESET_SATACOLD>;
+		reset-names = "sata", "sata-cold";
+		power-domains = <&bpmp TEGRA186_POWER_DOMAIN_SAX>;
+	};
+
 	gic: interrupt-controller@3881000 {
 		compatible = "arm,gic-400";
 		#interrupt-cells = <3>;
