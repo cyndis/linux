@@ -253,6 +253,10 @@ struct host1x_job {
 	/* Check if class belongs to the unit */
 	int (*is_valid_class)(u32 class);
 
+	/* Job done callback */
+	void (*done)(struct host1x_job *job);
+	void *callback_data;
+
 	/* Request a SETCLASS to this class */
 	u32 class;
 
