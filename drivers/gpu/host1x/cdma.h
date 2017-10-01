@@ -59,6 +59,7 @@ struct buffer_timeout {
 	ktime_t start_ktime;		/* starting time */
 	/* context timeout information */
 	int client;
+	u32 class;
 };
 
 enum cdma_event {
