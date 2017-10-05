@@ -51,6 +51,8 @@
 #ifndef HOST1X_HW_HOST1X05_CHANNEL_H
 #define HOST1X_HW_HOST1X05_CHANNEL_H
 
+#define HOST1X_CHANNEL_BASE(x)		((x) * 0x4000)
+
 static inline u32 host1x_channel_fifostat_r(void)
 {
 	return 0x0;
