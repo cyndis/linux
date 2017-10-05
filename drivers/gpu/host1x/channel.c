@@ -42,6 +42,8 @@ int host1x_channel_list_init(struct host1x_channel_list *chlist,
 
 	bitmap_zero(chlist->allocated_channels, num_channels);
 
+	mutex_init(&chlist->lock);
+
 	return 0;
 }
 
@@ -111,8 +113,11 @@ static struct host1x_channel *acquire_unused_channel(struct host1x *host)
 	unsigned int max_channels = host->info->nb_channels;
 	unsigned int index;
 
+	mutex_lock(&chlist->lock);
+
 	index = find_first_zero_bit(chlist->allocated_channels, max_channels);
 	if (index >= max_channels) {
+		mutex_unlock(&chlist->lock);
 		dev_err(host->dev, "failed to find free channel\n");
 		return NULL;
 	}
@@ -120,6 +125,8 @@ static struct host1x_channel *acquire_unused_channel(struct host1x *host)
 	chlist->channels[index].id = index;
 
 	set_bit(index, chlist->allocated_channels);
+
+	mutex_unlock(&chlist->lock);
 
 	return &chlist->channels[index];
 }
