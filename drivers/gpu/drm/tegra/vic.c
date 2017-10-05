@@ -29,7 +29,6 @@ struct vic_config {
 
 struct vic {
 	struct falcon falcon;
-	bool booted;
 
 	void __iomem *regs;
 	struct tegra_drm_client client;
@@ -51,32 +50,11 @@ static void vic_writel(struct vic *vic, u32 value, unsigned int offset)
 	writel(value, vic->regs + offset);
 }
 
-static int vic_runtime_resume(struct device *dev)
-{
-	struct vic *vic = dev_get_drvdata(dev);
-
-	return clk_prepare_enable(vic->clk);
-}
-
-static int vic_runtime_suspend(struct device *dev)
-{
-	struct vic *vic = dev_get_drvdata(dev);
-
-	clk_disable_unprepare(vic->clk);
-
-	vic->booted = false;
-
-	return 0;
-}
-
 static int vic_boot(struct vic *vic)
 {
 	u32 fce_ucode_size, fce_bin_data_offset;
 	void *hdr;
 	int err = 0;
-
-	if (vic->booted)
-		return 0;
 
 	/* setup clockgating registers */
 	vic_writel(vic, CG_IDLE_CG_DLY_CNT(4) |
@@ -108,7 +86,26 @@ static int vic_boot(struct vic *vic)
 		return err;
 	}
 
-	vic->booted = true;
+	return 0;
+}
+
+static int vic_runtime_resume(struct device *dev)
+{
+	struct vic *vic = dev_get_drvdata(dev);
+	int err;
+
+	err = clk_prepare_enable(vic->clk);
+	if (err < 0)
+		return err;
+
+	return vic_boot(vic);
+}
+
+static int vic_runtime_suspend(struct device *dev)
+{
+	struct vic *vic = dev_get_drvdata(dev);
+
+	clk_disable_unprepare(vic->clk);
 
 	return 0;
 }
@@ -226,10 +223,6 @@ static int vic_submit(struct tegra_drm_context *context,
 	err = pm_runtime_get_sync(vic->dev);
 	if (err < 0)
 		return err;
-
-	err = vic_boot(vic);
-	if (err < 0)
-		goto put_vic;
 
 	err = tegra_drm_context_get_channel(context);
 	if (err < 0)
