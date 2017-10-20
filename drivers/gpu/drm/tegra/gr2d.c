@@ -32,9 +32,9 @@ static int gr2d_init(struct host1x_client *client)
 	unsigned long flags = HOST1X_SYNCPT_HAS_BASE;
 	struct gr2d *gr2d = to_gr2d(drm);
 
-	gr2d->channel = host1x_channel_request(client->dev);
-	if (!gr2d->channel)
-		return -ENOMEM;
+	gr2d->channel = host1x_channel_request(client->dev, false);
+	if (IS_ERR(gr2d->channel))
+		return PTR_ERR(gr2d->channel);
 
 	client->syncpts[0] = host1x_syncpt_request(client, flags);
 	if (!client->syncpts[0]) {

@@ -380,7 +380,8 @@ static int host1x_waitchk_copy_from_user(struct host1x_waitchk *dest,
  * Request a free hardware host1x channel for this user context, or if the
  * context already has one, bump its refcount.
  *
- * Returns 0 on success, or -EBUSY if there were no free hardware channels.
+ * Returns 0 on success, -EINTR if wait for a free channel was interrupted,
+ * or other error.
  */
 int tegra_drm_context_get_channel(struct tegra_drm_context *context)
 {
@@ -389,10 +390,10 @@ int tegra_drm_context_get_channel(struct tegra_drm_context *context)
 	mutex_lock(&context->lock);
 
 	if (context->pending_jobs == 0) {
-		context->channel = host1x_channel_request(client->dev);
-		if (!context->channel) {
+		context->channel = host1x_channel_request(client->dev, true);
+		if (IS_ERR(context->channel)) {
 			mutex_unlock(&context->lock);
-			return -EBUSY;
+			return PTR_ERR(context->channel);
 		}
 	}
 

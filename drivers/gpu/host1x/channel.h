@@ -31,6 +31,7 @@ struct host1x_channel_list {
 	struct host1x_channel *channels;
 
 	struct mutex lock;
+	struct semaphore sema;
 	unsigned long *allocated_channels;
 };
 

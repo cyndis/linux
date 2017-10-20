@@ -42,9 +42,9 @@ static int gr3d_init(struct host1x_client *client)
 	unsigned long flags = HOST1X_SYNCPT_HAS_BASE;
 	struct gr3d *gr3d = to_gr3d(drm);
 
-	gr3d->channel = host1x_channel_request(client->dev);
-	if (!gr3d->channel)
-		return -ENOMEM;
+	gr3d->channel = host1x_channel_request(client->dev, false);
+	if (IS_ERR(gr3d->channel))
+		return PTR_ERR(gr3d->channel);
 
 	client->syncpts[0] = host1x_syncpt_request(client, flags);
 	if (!client->syncpts[0]) {

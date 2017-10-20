@@ -43,6 +43,7 @@ int host1x_channel_list_init(struct host1x_channel_list *chlist,
 	bitmap_zero(chlist->allocated_channels, num_channels);
 
 	mutex_init(&chlist->lock);
+	sema_init(&chlist->sema, num_channels);
 
 	return 0;
 }
@@ -99,6 +100,8 @@ static void release_channel(struct kref *kref)
 	host1x_cdma_deinit(&channel->cdma);
 
 	clear_bit(channel->id, chlist->allocated_channels);
+
+	up(&chlist->sema);
 }
 
 void host1x_channel_put(struct host1x_channel *channel)
@@ -107,19 +110,30 @@ void host1x_channel_put(struct host1x_channel *channel)
 }
 EXPORT_SYMBOL(host1x_channel_put);
 
-static struct host1x_channel *acquire_unused_channel(struct host1x *host)
+static struct host1x_channel *acquire_unused_channel(struct host1x *host,
+						     bool wait)
 {
 	struct host1x_channel_list *chlist = &host->channel_list;
 	unsigned int max_channels = host->info->nb_channels;
 	unsigned int index;
+	int err;
+
+	if (wait) {
+		err = down_interruptible(&chlist->sema);
+		if (err)
+			return ERR_PTR(err);
+	} else {
+		if (down_trylock(&chlist->sema))
+			return ERR_PTR(-EBUSY);
+	}
 
 	mutex_lock(&chlist->lock);
 
 	index = find_first_zero_bit(chlist->allocated_channels, max_channels);
-	if (index >= max_channels) {
+	if (WARN(index >= max_channels, "failed to find free channel")) {
 		mutex_unlock(&chlist->lock);
 		dev_err(host->dev, "failed to find free channel\n");
-		return NULL;
+		return ERR_PTR(-EBUSY);
 	}
 
 	chlist->channels[index].id = index;
@@ -134,20 +148,26 @@ static struct host1x_channel *acquire_unused_channel(struct host1x *host)
 /**
  * host1x_channel_request() - Allocate a channel
  * @device: Host1x unit this channel will be used to send commands to
+ * @wait: Whether to wait for a free channels if all are reserved
  *
- * Allocates a new host1x channel for @device. May return NULL if CDMA
- * initialization fails.
+ * Allocates a new host1x channel for @device. If all channels are in use,
+ * and @wait is true, does an interruptible wait until one is available.
+ *
+ * If a channel was acquired, returns a pointer to it. Otherwise returns
+ * an error pointer with -EINTR if the wait was interrupted, -EBUSY
+ * if a channel could not be acquired or another error code if channel
+ * initialization failed.
  */
-struct host1x_channel *host1x_channel_request(struct device *dev)
+struct host1x_channel *host1x_channel_request(struct device *dev, bool wait)
 {
 	struct host1x *host = dev_get_drvdata(dev->parent);
 	struct host1x_channel_list *chlist = &host->channel_list;
 	struct host1x_channel *channel;
 	int err;
 
-	channel = acquire_unused_channel(host);
-	if (!channel)
-		return NULL;
+	channel = acquire_unused_channel(host, wait);
+	if (IS_ERR(channel))
+		return channel;
 
 	kref_init(&channel->refcount);
 	mutex_init(&channel->submitlock);
@@ -168,6 +188,6 @@ fail:
 
 	dev_err(dev, "failed to initialize channel\n");
 
-	return NULL;
+	return ERR_PTR(err);
 }
 EXPORT_SYMBOL(host1x_channel_request);
