@@ -373,6 +373,16 @@ static int host1x_waitchk_copy_from_user(struct host1x_waitchk *dest,
 	return 0;
 }
 
+static void tegra_drm_job_done(struct host1x_job *job)
+{
+	struct tegra_drm_context *context = job->callback_data;
+
+	if (context->client->ops->submit_done)
+		context->client->ops->submit_done(context);
+
+	kref_put(&context->ref, tegra_drm_context_free);
+}
+
 int tegra_drm_submit(struct tegra_drm_context *context,
 		     struct drm_tegra_submit *args, struct drm_device *drm,
 		     struct drm_file *file)
@@ -553,6 +563,9 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	job->syncpt_id = syncpt.id;
 	job->timeout = 10000;
 
+	job->done = tegra_drm_job_done;
+	job->callback_data = context;
+
 	if (args->timeout && args->timeout < 10000)
 		job->timeout = args->timeout;
 
@@ -560,8 +573,11 @@ int tegra_drm_submit(struct tegra_drm_context *context,
 	if (err)
 		goto fail;
 
+	kref_get(&context->ref);
+
 	err = host1x_job_submit(job);
 	if (err) {
+		kref_put(&context->ref, tegra_drm_context_free);
 		host1x_job_unpin(job);
 		goto fail;
 	}
