@@ -99,4 +99,7 @@ unsigned int host1x_cdma_wait_locked(struct host1x_cdma *cdma,
 				     enum cdma_event event);
 void host1x_cdma_update_sync_queue(struct host1x_cdma *cdma,
 				   struct device *dev);
+
+int host1x_pushbuffer_init(struct push_buffer *pb);
+void host1x_pushbuffer_destroy(struct push_buffer *pb);
 #endif

@@ -29,6 +29,7 @@ struct host1x_channel;
 
 struct host1x_channel_list {
 	struct host1x_channel *channels;
+	unsigned int num_channels;
 
 	struct mutex lock;
 	struct semaphore sema;

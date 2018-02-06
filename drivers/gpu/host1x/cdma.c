@@ -46,7 +46,7 @@
 /*
  * Clean up push buffer resources
  */
-static void host1x_pushbuffer_destroy(struct push_buffer *pb)
+void host1x_pushbuffer_destroy(struct push_buffer *pb)
 {
 	struct host1x_cdma *cdma = pb_to_cdma(pb);
 	struct host1x *host1x = cdma_to_host1x(cdma);
@@ -68,7 +68,7 @@ static void host1x_pushbuffer_destroy(struct push_buffer *pb)
 /*
  * Init push buffer resources
  */
-static int host1x_pushbuffer_init(struct push_buffer *pb)
+int host1x_pushbuffer_init(struct push_buffer *pb)
 {
 	struct host1x_cdma *cdma = pb_to_cdma(pb);
 	struct host1x *host1x = cdma_to_host1x(cdma);
@@ -420,8 +420,6 @@ void host1x_cdma_update_sync_queue(struct host1x_cdma *cdma,
  */
 int host1x_cdma_init(struct host1x_cdma *cdma)
 {
-	int err;
-
 	mutex_init(&cdma->lock);
 	sema_init(&cdma->sem, 0);
 
@@ -431,10 +429,6 @@ int host1x_cdma_init(struct host1x_cdma *cdma)
 	cdma->running = false;
 	cdma->torndown = false;
 
-	err = host1x_pushbuffer_init(&cdma->push_buffer);
-	if (err)
-		return err;
-
 	return 0;
 }
 
@@ -443,7 +437,6 @@ int host1x_cdma_init(struct host1x_cdma *cdma)
  */
 int host1x_cdma_deinit(struct host1x_cdma *cdma)
 {
-	struct push_buffer *pb = &cdma->push_buffer;
 	struct host1x *host1x = cdma_to_host1x(cdma);
 
 	if (cdma->running) {
@@ -451,7 +444,6 @@ int host1x_cdma_deinit(struct host1x_cdma *cdma)
 		return -EBUSY;
 	}
 
-	host1x_pushbuffer_destroy(pb);
 	host1x_hw_cdma_timeout_destroy(host1x, cdma);
 
 	return 0;

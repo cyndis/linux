@@ -32,6 +32,8 @@ int host1x_channel_list_init(struct host1x_channel_list *chlist,
 	if (!chlist->channels)
 		return -ENOMEM;
 
+	chlist->num_channels = num_channels;
+
 	chlist->allocated_channels =
 		kcalloc(BITS_TO_LONGS(num_channels), sizeof(unsigned long),
 			GFP_KERNEL);
@@ -50,6 +52,15 @@ int host1x_channel_list_init(struct host1x_channel_list *chlist,
 
 void host1x_channel_list_free(struct host1x_channel_list *chlist)
 {
+	int i;
+
+	for (i = 0; i < chlist->num_channels; i++) {
+		struct host1x_channel *ch = &chlist->channels[i];
+
+		if (ch->cdma.push_buffer.mapped)
+			host1x_pushbuffer_destroy(&ch->cdma.push_buffer);
+	}
+
 	kfree(chlist->allocated_channels);
 	kfree(chlist->channels);
 }
@@ -180,6 +191,13 @@ struct host1x_channel *host1x_channel_request(struct device *dev, bool wait)
 	err = host1x_cdma_init(&channel->cdma);
 	if (err < 0)
 		goto fail;
+
+	/* pushbuffers are retained to decrease channel allocation latency */
+	if (!channel->cdma.push_buffer.mapped) {
+		err = host1x_pushbuffer_init(&channel->cdma.push_buffer);
+		if (err < 0)
+			goto fail;
+	}
 
 	return channel;
 
