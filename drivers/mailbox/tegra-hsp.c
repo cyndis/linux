@@ -54,7 +54,6 @@ struct tegra_hsp_channel;
 struct tegra_hsp;
 
 struct tegra_hsp_channel {
-	unsigned int type;
 	struct tegra_hsp *hsp;
 	struct mbox_chan *chan;
 	void __iomem *regs;
@@ -68,12 +67,6 @@ struct tegra_hsp_doorbell {
 	unsigned int index;
 };
 
-static inline struct tegra_hsp_doorbell *
-channel_to_doorbell(struct tegra_hsp_channel *channel)
-{
-	return container_of(channel, struct tegra_hsp_doorbell, channel);
-}
-
 struct tegra_hsp_db_map {
 	const char *name;
 	unsigned int master;
@@ -86,19 +79,14 @@ struct tegra_hsp_mailbox {
 	bool sending;
 };
 
-static inline struct tegra_hsp_mailbox *
-channel_to_mailbox(struct tegra_hsp_channel *channel)
-{
-	return container_of(channel, struct tegra_hsp_mailbox, channel);
-}
-
 struct tegra_hsp_soc {
 	const struct tegra_hsp_db_map *map;
 };
 
 struct tegra_hsp {
 	const struct tegra_hsp_soc *soc;
-	struct mbox_controller mbox;
+	struct mbox_controller mbox_db;
+	struct mbox_controller mbox_sm;
 	void __iomem *regs;
 	unsigned int doorbell_irq;
 	unsigned int shared_irq;
@@ -112,12 +100,6 @@ struct tegra_hsp {
 	struct list_head doorbells;
 	struct tegra_hsp_mailbox *mailboxes;
 };
-
-static inline struct tegra_hsp *
-to_tegra_hsp(struct mbox_controller *mbox)
-{
-	return container_of(mbox, struct tegra_hsp, mbox);
-}
 
 static inline u32 tegra_hsp_readl(struct tegra_hsp *hsp, unsigned int offset)
 {
@@ -191,7 +173,7 @@ static irqreturn_t tegra_hsp_doorbell_irq(int irq, void *data)
 
 	spin_lock(&hsp->lock);
 
-	for_each_set_bit(master, &value, hsp->mbox.num_chans) {
+	for_each_set_bit(master, &value, hsp->mbox_db.num_chans) {
 		struct tegra_hsp_doorbell *db;
 
 		db = __tegra_hsp_doorbell_get(hsp, master);
@@ -278,15 +260,16 @@ static void __tegra_hsp_doorbell_destroy(struct tegra_hsp_doorbell *db)
 	kfree(db);
 }
 
-static int tegra_hsp_doorbell_startup(struct tegra_hsp_doorbell *db)
+static int tegra_hsp_doorbell_startup(struct mbox_chan *chan)
 {
+	struct tegra_hsp_doorbell *db = chan->con_priv;
 	struct tegra_hsp *hsp = db->channel.hsp;
 	struct tegra_hsp_doorbell *ccplex;
 	unsigned long flags;
 	u32 value;
 
-	if (db->master >= hsp->mbox.num_chans) {
-		dev_err(hsp->mbox.dev,
+	if (db->master >= hsp->mbox_db.num_chans) {
+		dev_err(hsp->mbox_db.dev,
 			"invalid master ID %u for HSP channel\n",
 			db->master);
 		return -EINVAL;
@@ -310,8 +293,9 @@ static int tegra_hsp_doorbell_startup(struct tegra_hsp_doorbell *db)
 	return 0;
 }
 
-static void tegra_hsp_doorbell_shutdown(struct tegra_hsp_doorbell *db)
+static void tegra_hsp_doorbell_shutdown(struct mbox_chan *chan)
 {
+	struct tegra_hsp_doorbell *db = chan->con_priv;
 	struct tegra_hsp *hsp = db->channel.hsp;
 	struct tegra_hsp_doorbell *ccplex;
 	unsigned long flags;
@@ -330,8 +314,9 @@ static void tegra_hsp_doorbell_shutdown(struct tegra_hsp_doorbell *db)
 	spin_unlock_irqrestore(&hsp->lock, flags);
 }
 
-static int tegra_hsp_mailbox_startup(struct tegra_hsp_mailbox *mb)
+static int tegra_hsp_mailbox_startup(struct mbox_chan *chan)
 {
+	struct tegra_hsp_mailbox *mb = chan->con_priv;
 	struct tegra_hsp *hsp = mb->channel.hsp;
 	u32 value;
 
@@ -345,89 +330,76 @@ static int tegra_hsp_mailbox_startup(struct tegra_hsp_mailbox *mb)
 	return 0;
 }
 
-static int tegra_hsp_mailbox_shutdown(struct tegra_hsp_mailbox *mb)
+static void tegra_hsp_mailbox_shutdown(struct mbox_chan *chan)
 {
+	struct tegra_hsp_mailbox *mb = chan->con_priv;
 	struct tegra_hsp *hsp = mb->channel.hsp;
 	u32 value;
 
 	value = tegra_hsp_readl(hsp, HSP_INT0_IE);
 	value &= ~BIT(mb->index + 8);
 	tegra_hsp_writel(hsp, value, HSP_INT0_IE);
+}
+
+static int tegra_hsp_doorbell_send_data(struct mbox_chan *chan, void *data)
+{
+	struct tegra_hsp_doorbell *db = chan->con_priv;
+
+	tegra_hsp_channel_writel(&db->channel, 1, HSP_DB_TRIGGER);
 
 	return 0;
 }
 
-static int tegra_hsp_send_data(struct mbox_chan *chan, void *data)
+static int tegra_hsp_mailbox_send_data(struct mbox_chan *chan, void *data)
 {
-	struct tegra_hsp_channel *channel = chan->con_priv;
-	struct tegra_hsp_mailbox *mailbox;
+	struct tegra_hsp_mailbox *sm = chan->con_priv;
 	uint32_t value;
 
-	switch (channel->type) {
-	case TEGRA_HSP_MBOX_TYPE_DB:
-		tegra_hsp_channel_writel(channel, 1, HSP_DB_TRIGGER);
-		return 0;
+	sm->sending = true;
 
-	case TEGRA_HSP_MBOX_TYPE_SM:
-		mailbox = channel_to_mailbox(channel);
-		mailbox->sending = true;
+	value = *(uint32_t *)data;
+	/* Mark mailbox full */
+	value |= HSP_SM_SHRD_MBOX_FULL;
 
-		value = *(uint32_t *)data;
-		/* Mark mailbox full */
-		value |= HSP_SM_SHRD_MBOX_FULL;
+	tegra_hsp_channel_writel(&sm->channel, value, HSP_SM_SHRD_MBOX);
 
-		tegra_hsp_channel_writel(channel, value, HSP_SM_SHRD_MBOX);
-
-		return readl_poll_timeout(
-			channel->regs + HSP_SM_SHRD_MBOX, value,
-			!(value & HSP_SM_SHRD_MBOX_FULL), 0, 10000);
-	}
-
-	return -EINVAL;
+	return readl_poll_timeout(
+		sm->channel.regs + HSP_SM_SHRD_MBOX, value,
+		!(value & HSP_SM_SHRD_MBOX_FULL), 0, 10000);
 }
 
-static int tegra_hsp_startup(struct mbox_chan *chan)
-{
-	struct tegra_hsp_channel *channel = chan->con_priv;
+// static bool tegra_hsp_mailbox_last_tx_done(struct mbox_chan *chan, void *data)
+// {
+//
+// }
 
-	switch (channel->type) {
-	case TEGRA_HSP_MBOX_TYPE_DB:
-		return tegra_hsp_doorbell_startup(channel_to_doorbell(channel));
-	case TEGRA_HSP_MBOX_TYPE_SM:
-		return tegra_hsp_mailbox_startup(channel_to_mailbox(channel));
-	}
-
-	return -EINVAL;
-}
-
-static void tegra_hsp_shutdown(struct mbox_chan *chan)
-{
-	struct tegra_hsp_channel *channel = chan->con_priv;
-
-	switch (channel->type) {
-	case TEGRA_HSP_MBOX_TYPE_DB:
-		tegra_hsp_doorbell_shutdown(channel_to_doorbell(channel));
-		break;
-	case TEGRA_HSP_MBOX_TYPE_SM:
-		tegra_hsp_mailbox_shutdown(channel_to_mailbox(channel));
-		break;
-	}
-}
-
-static const struct mbox_chan_ops tegra_hsp_ops = {
-	.send_data = tegra_hsp_send_data,
-	.startup = tegra_hsp_startup,
-	.shutdown = tegra_hsp_shutdown,
+static const struct mbox_chan_ops tegra_hsp_db_ops = {
+	.send_data = tegra_hsp_doorbell_send_data,
+	.startup = tegra_hsp_doorbell_startup,
+	.shutdown = tegra_hsp_doorbell_shutdown,
 };
 
-static struct mbox_chan *tegra_hsp_doorbell_xlate(struct tegra_hsp *hsp,
-						  unsigned int master)
+static const struct mbox_chan_ops tegra_hsp_sm_ops = {
+	.send_data = tegra_hsp_mailbox_send_data,
+// 	.last_tx_done = tegra_hsp_mailbox_last_tx_done,
+	.startup = tegra_hsp_mailbox_startup,
+	.shutdown = tegra_hsp_mailbox_shutdown,
+};
+
+static struct mbox_chan *of_tegra_hsp_db_xlate(
+	struct mbox_controller *mbox, const struct of_phandle_args *args)
 {
 	struct tegra_hsp_channel *channel = ERR_PTR(-ENODEV);
+	struct tegra_hsp *hsp = container_of(mbox, struct tegra_hsp, mbox_db);
+	unsigned int type = args->args[0];
+	unsigned int master = args->args[1];
 	struct tegra_hsp_doorbell *db;
 	struct mbox_chan *chan;
 	unsigned long flags;
 	unsigned int i;
+
+	if (type != TEGRA_HSP_MBOX_TYPE_DB || !hsp->doorbell_irq)
+		return ERR_PTR(-ENODEV);
 
 	db = tegra_hsp_doorbell_get(hsp, master);
 	if (db)
@@ -438,12 +410,11 @@ static struct mbox_chan *tegra_hsp_doorbell_xlate(struct tegra_hsp *hsp,
 
 	spin_lock_irqsave(&hsp->lock, flags);
 
-	for (i = 0; i < hsp->mbox.num_chans; i++) {
-		chan = &hsp->mbox.chans[i];
+	for (i = 0; i < hsp->mbox_db.num_chans; i++) {
+		chan = &hsp->mbox_db.chans[i];
 		if (!chan->con_priv) {
-			chan->con_priv = channel;
+			chan->con_priv = db;
 			channel->chan = chan;
-			channel->type = TEGRA_HSP_MBOX_TYPE_DB;
 			break;
 		}
 
@@ -455,29 +426,18 @@ static struct mbox_chan *tegra_hsp_doorbell_xlate(struct tegra_hsp *hsp,
 	return chan ?: ERR_PTR(-EBUSY);
 }
 
-static struct mbox_chan *of_tegra_hsp_xlate(struct mbox_controller *mbox,
-					    const struct of_phandle_args *args)
+static struct mbox_chan *of_tegra_hsp_sm_xlate(
+	struct mbox_controller *mbox, const struct of_phandle_args *args)
 {
-	struct tegra_hsp *hsp = to_tegra_hsp(mbox);
+	struct tegra_hsp *hsp = container_of(mbox, struct tegra_hsp, mbox_sm);
 	unsigned int type = args->args[0];
 	unsigned int param = args->args[1];
 
-	switch (type) {
-	case TEGRA_HSP_MBOX_TYPE_DB:
-		if (hsp->doorbell_irq)
-			return tegra_hsp_doorbell_xlate(hsp, param);
-		else
-			return ERR_PTR(-EINVAL);
+	if (type != TEGRA_HSP_MBOX_TYPE_SM || !hsp->shared_irq ||
+	    param >= hsp->num_sm)
+		return ERR_PTR(-ENODEV);
 
-	case TEGRA_HSP_MBOX_TYPE_SM:
-		if (hsp->shared_irq && param < hsp->num_sm)
-			return hsp->mailboxes[param].channel.chan;
-		else
-			return ERR_PTR(-EINVAL);
-
-	default:
-		return ERR_PTR(-EINVAL);
-	}
+	return hsp->mailboxes[param].channel.chan;
 }
 
 static void tegra_hsp_remove_doorbells(struct tegra_hsp *hsp)
@@ -528,10 +488,9 @@ static int tegra_hsp_add_mailboxes(struct tegra_hsp *hsp, struct device *dev)
 		mb->sending = false;
 
 		mb->channel.hsp = hsp;
-		mb->channel.type = TEGRA_HSP_MBOX_TYPE_SM;
 		mb->channel.regs = hsp->regs + SZ_64K + i * SZ_32K;
-		mb->channel.chan = &hsp->mbox.chans[i];
-		mb->channel.chan->con_priv = &mb->channel;
+		mb->channel.chan = &hsp->mbox_sm.chans[i];
+		mb->channel.chan->con_priv = mb;
 	}
 
 	return 0;
@@ -572,18 +531,33 @@ static int tegra_hsp_probe(struct platform_device *pdev)
 	if (err >= 0)
 		hsp->shared_irq = err;
 
-	hsp->mbox.of_xlate = of_tegra_hsp_xlate;
-	/* First nSM are reserved for mailboxes */
-	hsp->mbox.num_chans = 32;
-	hsp->mbox.dev = &pdev->dev;
-	hsp->mbox.txdone_irq = false;
-	hsp->mbox.txdone_poll = false;
-	hsp->mbox.ops = &tegra_hsp_ops;
+	/* Initialize doorbell mailbox controller */
 
-	hsp->mbox.chans = devm_kcalloc(&pdev->dev, hsp->mbox.num_chans,
-					sizeof(*hsp->mbox.chans),
-					GFP_KERNEL);
-	if (!hsp->mbox.chans)
+	hsp->mbox_db.of_xlate = of_tegra_hsp_db_xlate;
+	hsp->mbox_db.num_chans = 32;
+	hsp->mbox_db.dev = &pdev->dev;
+	hsp->mbox_db.txdone_irq = false;
+	hsp->mbox_db.txdone_poll = false;
+	hsp->mbox_db.ops = &tegra_hsp_db_ops;
+
+	hsp->mbox_db.chans = devm_kcalloc(&pdev->dev, hsp->mbox_db.num_chans,
+					  sizeof(*hsp->mbox_db.chans),
+					  GFP_KERNEL);
+	if (!hsp->mbox_db.chans)
+		return -ENOMEM;
+
+	/* Initialize shared mailbox controller */
+
+	hsp->mbox_sm.of_xlate = of_tegra_hsp_sm_xlate;
+	hsp->mbox_sm.num_chans = hsp->num_sm;
+	hsp->mbox_sm.dev = &pdev->dev;
+	//hsp->mbox_sm.txdone_poll = true;
+	hsp->mbox_sm.ops = &tegra_hsp_sm_ops;
+
+	hsp->mbox_sm.chans = devm_kcalloc(&pdev->dev, hsp->mbox_sm.num_chans,
+					  sizeof(*hsp->mbox_sm.chans),
+					  GFP_KERNEL);
+	if (!hsp->mbox_sm.chans)
 		return -ENOMEM;
 
 	if (hsp->doorbell_irq) {
@@ -606,10 +580,16 @@ static int tegra_hsp_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, hsp);
 
-	err = mbox_controller_register(&hsp->mbox);
+	err = mbox_controller_register(&hsp->mbox_db);
 	if (err) {
-		dev_err(&pdev->dev, "failed to register mailbox: %d\n", err);
+		dev_err(&pdev->dev, "failed to register db mailbox: %d\n", err);
 		goto remove_doorbells;
+	}
+
+	err = mbox_controller_register(&hsp->mbox_sm);
+	if (err) {
+		dev_err(&pdev->dev, "failed to register sm mailbox: %d\n", err);
+		goto unregister_db_controller;
 	}
 
 	if (hsp->doorbell_irq) {
@@ -620,7 +600,7 @@ static int tegra_hsp_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev,
 			        "failed to request doorbell IRQ#%u: %d\n",
 				hsp->doorbell_irq, err);
-			goto unregister_mbox_controller;
+			goto unregister_sm_controller;
 		}
 	}
 
@@ -632,14 +612,16 @@ static int tegra_hsp_probe(struct platform_device *pdev)
 			dev_err(&pdev->dev,
 				"failed to request shared0 IRQ%u: %d\n",
 				hsp->shared_irq, err);
-			goto unregister_mbox_controller;
+			goto unregister_sm_controller;
 		}
 	}
 
 	return 0;
 
-unregister_mbox_controller:
-	mbox_controller_unregister(&hsp->mbox);
+unregister_sm_controller:
+	mbox_controller_unregister(&hsp->mbox_sm);
+unregister_db_controller:
+	mbox_controller_unregister(&hsp->mbox_db);
 remove_doorbells:
 	if (hsp->doorbell_irq)
 		tegra_hsp_remove_doorbells(hsp);
@@ -651,7 +633,8 @@ static int tegra_hsp_remove(struct platform_device *pdev)
 {
 	struct tegra_hsp *hsp = platform_get_drvdata(pdev);
 
-	mbox_controller_unregister(&hsp->mbox);
+	mbox_controller_unregister(&hsp->mbox_sm);
+	mbox_controller_unregister(&hsp->mbox_db);
 	if (hsp->doorbell_irq)
 		tegra_hsp_remove_doorbells(hsp);
 
