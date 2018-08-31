@@ -24,8 +24,8 @@
 
 #include "mailbox.h"
 
-#define HSP_INT0_IE		0x100
-#define HSP_INT0_IE_FULL_SHIFT	8
+#define HSP_INT1_IE		0x104
+#define HSP_INT1_IE_FULL_SHIFT	8
 #define HSP_INT_IR		0x304
 #define HSP_INT_IR_FULL_SHIFT	8
 #define HSP_INT_IR_FULL_MASK	0xff
@@ -323,9 +323,9 @@ static int tegra_hsp_mailbox_startup(struct mbox_chan *chan)
 	mb->channel.chan->txdone_method = TXDONE_BY_BLOCK;
 
 	/* Route FULL interrupt to external IRQ 0 */
-	value = tegra_hsp_readl(hsp, HSP_INT0_IE);
-	value |= BIT(HSP_INT0_IE_FULL_SHIFT + mb->index);
-	tegra_hsp_writel(hsp, value, HSP_INT0_IE);
+	value = tegra_hsp_readl(hsp, HSP_INT1_IE);
+	value |= BIT(HSP_INT1_IE_FULL_SHIFT + mb->index);
+	tegra_hsp_writel(hsp, value, HSP_INT1_IE);
 
 	return 0;
 }
@@ -336,9 +336,9 @@ static void tegra_hsp_mailbox_shutdown(struct mbox_chan *chan)
 	struct tegra_hsp *hsp = mb->channel.hsp;
 	u32 value;
 
-	value = tegra_hsp_readl(hsp, HSP_INT0_IE);
+	value = tegra_hsp_readl(hsp, HSP_INT1_IE);
 	value &= ~BIT(mb->index + 8);
-	tegra_hsp_writel(hsp, value, HSP_INT0_IE);
+	tegra_hsp_writel(hsp, value, HSP_INT1_IE);
 }
 
 static int tegra_hsp_doorbell_send_data(struct mbox_chan *chan, void *data)
@@ -368,11 +368,6 @@ static int tegra_hsp_mailbox_send_data(struct mbox_chan *chan, void *data)
 		!(value & HSP_SM_SHRD_MBOX_FULL), 0, 10000);
 }
 
-// static bool tegra_hsp_mailbox_last_tx_done(struct mbox_chan *chan, void *data)
-// {
-//
-// }
-
 static const struct mbox_chan_ops tegra_hsp_db_ops = {
 	.send_data = tegra_hsp_doorbell_send_data,
 	.startup = tegra_hsp_doorbell_startup,
@@ -381,7 +376,6 @@ static const struct mbox_chan_ops tegra_hsp_db_ops = {
 
 static const struct mbox_chan_ops tegra_hsp_sm_ops = {
 	.send_data = tegra_hsp_mailbox_send_data,
-// 	.last_tx_done = tegra_hsp_mailbox_last_tx_done,
 	.startup = tegra_hsp_mailbox_startup,
 	.shutdown = tegra_hsp_mailbox_shutdown,
 };
@@ -527,7 +521,7 @@ static int tegra_hsp_probe(struct platform_device *pdev)
 	if (err >= 0)
 		hsp->doorbell_irq = err;
 
-	err = platform_get_irq_byname(pdev, "shared0");
+	err = platform_get_irq_byname(pdev, "shared1");
 	if (err >= 0)
 		hsp->shared_irq = err;
 
