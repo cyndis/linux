@@ -43,8 +43,9 @@
 #define HSP_DB_RAW	0x8
 #define HSP_DB_PENDING	0xc
 
-#define HSP_SM_SHRD_MBOX	0x0
-#define HSP_SM_SHRD_MBOX_FULL	BIT(31)
+#define HSP_SM_SHRD_MBOX		0x0
+#define HSP_SM_SHRD_MBOX_FULL		BIT(31)
+#define HSP_SM_SHRD_MBOX_EMPTY_INT_IE	0x8
 
 #define HSP_DB_CCPLEX		1
 #define HSP_DB_BPMP		3
@@ -76,7 +77,6 @@ struct tegra_hsp_db_map {
 struct tegra_hsp_mailbox {
 	struct tegra_hsp_channel channel;
 	unsigned int index;
-	bool sending;
 };
 
 struct tegra_hsp_soc {
@@ -197,27 +197,51 @@ static irqreturn_t tegra_hsp_doorbell_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static void debug_print(struct tegra_hsp_mailbox *sm)
+{
+	uint32_t value = BIT(24) | '!';
+	uint32_t val;
+
+// 	readl_poll_timeout(sm->channel.regs + HSP_SM_SHRD_MBOX, val,
+// 			   !(val & HSP_SM_SHRD_MBOX_FULL), 0, 10000);
+
+	for (;;) {
+		tegra_hsp_channel_writel(&sm->channel, value,
+					 HSP_SM_SHRD_MBOX);
+	}
+}
+
 static irqreturn_t tegra_hsp_shared_irq(int irq, void *data)
 {
 	struct tegra_hsp_mailbox *mb;
 	struct tegra_hsp *hsp = data;
 	unsigned long bit, mask;
 	u32 value;
+	bool full;
 
-	mask = tegra_hsp_readl(hsp, HSP_INT_IR);
-	/* Only interested in FULL interrupts */
-	mask = (mask >> HSP_INT_IR_FULL_SHIFT) & HSP_INT_IR_FULL_MASK;
+	mask =  tegra_hsp_readl(hsp, HSP_INT_IR);
+	mask &= tegra_hsp_readl(hsp, HSP_INT1_IE);
 
-	for_each_set_bit(bit, &mask, 8) {
-		mb = &hsp->mailboxes[bit];
+	tegra_hsp_writel(hsp, 0x0, HSP_INT1_IE);
+	tegra_hsp_writel(hsp, 0xdeadbeef, HSP_INT1_IE+4);
 
-		if (!mb->sending) {
+	for_each_set_bit(bit, &mask, 16) {
+		full = (bit >= HSP_INT_IR_FULL_SHIFT);
+		mb = &hsp->mailboxes[bit % HSP_INT_IR_FULL_SHIFT];
+
+		if (full) {
 			value = tegra_hsp_channel_readl(&mb->channel,
 							HSP_SM_SHRD_MBOX);
 			value &= ~HSP_SM_SHRD_MBOX_FULL;
 			mbox_chan_received_data(mb->channel.chan, &value);
 			tegra_hsp_channel_writel(&mb->channel, value,
 						 HSP_SM_SHRD_MBOX);
+		} else {
+			/* Disable EMPTY interrupt */
+			tegra_hsp_writel(hsp, 0x0, HSP_INT1_IE);
+// 			debug_print(mb);
+
+			mbox_chan_txdone(mb->channel.chan, 0);
 		}
 	}
 
@@ -320,12 +344,11 @@ static int tegra_hsp_mailbox_startup(struct mbox_chan *chan)
 	struct tegra_hsp *hsp = mb->channel.hsp;
 	u32 value;
 
-	mb->channel.chan->txdone_method = TXDONE_BY_BLOCK;
+// 	mb->channel.chan->txdone_method = TXDONE_BY_BLOCK;
 
-	/* Route FULL interrupt to external IRQ 0 */
-	value = tegra_hsp_readl(hsp, HSP_INT1_IE);
-	value |= BIT(HSP_INT1_IE_FULL_SHIFT + mb->index);
-	tegra_hsp_writel(hsp, value, HSP_INT1_IE);
+	/* Route FULL interrupt to external IRQ 1 */
+// 	tegra_hsp_writel(hsp, BIT(HSP_INT1_IE_FULL_SHIFT + mb->index),
+// 			 HSP_INT1_IE);
 
 	return 0;
 }
@@ -337,7 +360,7 @@ static void tegra_hsp_mailbox_shutdown(struct mbox_chan *chan)
 	u32 value;
 
 	value = tegra_hsp_readl(hsp, HSP_INT1_IE);
-	value &= ~BIT(mb->index + 8);
+	value &= ~BIT(HSP_INT1_IE_FULL_SHIFT + mb->index);
 	tegra_hsp_writel(hsp, value, HSP_INT1_IE);
 }
 
@@ -353,9 +376,11 @@ static int tegra_hsp_doorbell_send_data(struct mbox_chan *chan, void *data)
 static int tegra_hsp_mailbox_send_data(struct mbox_chan *chan, void *data)
 {
 	struct tegra_hsp_mailbox *sm = chan->con_priv;
+	struct tegra_hsp *hsp = sm->channel.hsp;
 	uint32_t value;
 
-	sm->sending = true;
+	/* Disable possibly enabled FULL interrupt */
+	tegra_hsp_writel(hsp, 0x0, HSP_INT1_IE);
 
 	value = *(uint32_t *)data;
 	/* Mark mailbox full */
@@ -363,9 +388,15 @@ static int tegra_hsp_mailbox_send_data(struct mbox_chan *chan, void *data)
 
 	tegra_hsp_channel_writel(&sm->channel, value, HSP_SM_SHRD_MBOX);
 
-	return readl_poll_timeout(
-		sm->channel.regs + HSP_SM_SHRD_MBOX, value,
-		!(value & HSP_SM_SHRD_MBOX_FULL), 0, 10000);
+	/* Enable EMPTY interrupt */
+	tegra_hsp_channel_writel(
+		&sm->channel, 0x1, HSP_SM_SHRD_MBOX_EMPTY_INT_IE);
+	tegra_hsp_writel(hsp, BIT(sm->index), HSP_INT1_IE);
+
+	return 0;
+// 	return readl_poll_timeout(
+// 		sm->channel.regs + HSP_SM_SHRD_MBOX, value,
+// 		!(value & HSP_SM_SHRD_MBOX_FULL), 0, 10000);
 }
 
 static const struct mbox_chan_ops tegra_hsp_db_ops = {
@@ -479,7 +510,6 @@ static int tegra_hsp_add_mailboxes(struct tegra_hsp *hsp, struct device *dev)
 		struct tegra_hsp_mailbox *mb = &hsp->mailboxes[i];
 
 		mb->index = i;
-		mb->sending = false;
 
 		mb->channel.hsp = hsp;
 		mb->channel.regs = hsp->regs + SZ_64K + i * SZ_32K;
@@ -545,7 +575,7 @@ static int tegra_hsp_probe(struct platform_device *pdev)
 	hsp->mbox_sm.of_xlate = of_tegra_hsp_sm_xlate;
 	hsp->mbox_sm.num_chans = hsp->num_sm;
 	hsp->mbox_sm.dev = &pdev->dev;
-	//hsp->mbox_sm.txdone_poll = true;
+	hsp->mbox_sm.txdone_irq = true;
 	hsp->mbox_sm.ops = &tegra_hsp_sm_ops;
 
 	hsp->mbox_sm.chans = devm_kcalloc(&pdev->dev, hsp->mbox_sm.num_chans,
