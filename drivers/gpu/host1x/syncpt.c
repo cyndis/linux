@@ -42,9 +42,9 @@ static void host1x_syncpt_base_free(struct host1x_syncpt_base *base)
 		base->requested = false;
 }
 
-static struct host1x_syncpt *host1x_syncpt_alloc(struct host1x *host,
-						 struct host1x_client *client,
-						 unsigned long flags)
+struct host1x_syncpt *host1x_syncpt_alloc(struct host1x *host,
+					  struct host1x_client *client,
+					  unsigned long flags)
 {
 	struct host1x_syncpt *sp = host->syncpt;
 	unsigned int i;
@@ -69,7 +69,6 @@ static struct host1x_syncpt *host1x_syncpt_alloc(struct host1x *host,
 	if (!name)
 		goto free_base;
 
-	sp->client = client;
 	sp->name = name;
 
 	if (flags & HOST1X_SYNCPT_CLIENT_MANAGED)
@@ -447,7 +446,6 @@ void host1x_syncpt_free(struct host1x_syncpt *sp)
 	host1x_syncpt_base_free(sp->base);
 	kfree(sp->name);
 	sp->base = NULL;
-	sp->client = NULL;
 	sp->name = NULL;
 	sp->client_managed = false;
 
