@@ -162,6 +162,9 @@ u32 host1x_syncpt_base_id(struct host1x_syncpt_base *base);
 
 struct host1x_syncpt *host1x_syncpt_fd_get(int fd);
 
+struct dma_fence *host1x_fence_create(struct host1x_syncpt *sp, u32 threshold);
+int host1x_fence_create_fd(struct host1x_syncpt *sp, u32 threshold);
+
 /*
  * host1x channel
  */
