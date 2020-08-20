@@ -618,8 +618,8 @@ static void tegra_channel_cleanup(struct tegra_vi_channel *chan)
 {
 	v4l2_ctrl_handler_free(&chan->ctrl_handler);
 	media_entity_cleanup(&chan->video.entity);
-	host1x_syncpt_free(chan->mw_ack_sp);
-	host1x_syncpt_free(chan->frame_start_sp);
+	host1x_syncpt_put(chan->mw_ack_sp);
+	host1x_syncpt_put(chan->frame_start_sp);
 	mutex_destroy(&chan->video_lock);
 }
 
@@ -733,9 +733,9 @@ free_v4l2_ctrl_hdl:
 cleanup_media:
 	media_entity_cleanup(&chan->video.entity);
 free_mw_ack_syncpt:
-	host1x_syncpt_free(chan->mw_ack_sp);
+	host1x_syncpt_put(chan->mw_ack_sp);
 free_fs_syncpt:
-	host1x_syncpt_free(chan->frame_start_sp);
+	host1x_syncpt_put(chan->frame_start_sp);
 	return ret;
 }
 
