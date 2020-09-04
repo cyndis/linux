@@ -3,6 +3,8 @@ ccflags-$(CONFIG_DRM_TEGRA_DEBUG) += -DDEBUG
 
 tegra-drm-y := \
 	drm.o \
+	uapi/uapi.o \
+	uapi/submit.o \
 	gem.o \
 	fb.o \
 	dp.o \
