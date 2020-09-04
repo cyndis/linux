@@ -40,6 +40,13 @@ struct host1x_syncpt {
 
 	/* interrupt data */
 	struct host1x_syncpt_intr intr;
+
+	/* 
+	 * If a submission incrementing this syncpoint fails, lock it so that
+	 * further submission cannot be made until application has handled the
+	 * failure.
+	 */
+	bool locked;
 };
 
 /* Initialize sync point array  */
@@ -119,5 +126,10 @@ static inline int host1x_syncpt_is_valid(struct host1x_syncpt *sp)
 struct host1x_syncpt *host1x_syncpt_alloc(struct host1x *host,
 					  struct host1x_client *client,
 					  unsigned long flags);
+
+static inline void host1x_syncpt_set_locked(struct host1x_syncpt *sp)
+{
+	sp->locked = true;
+}
 
 #endif

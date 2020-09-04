@@ -129,6 +129,10 @@ static int channel_submit(struct host1x_job *job)
 				    job->num_gathers, job->num_relocs,
 				    job->syncpt->id, job->syncpt_incrs);
 
+	/* TODO this is racy */
+	if (job->syncpt->locked)
+		return -EPERM;
+
 	/* before error checks, return current max */
 	prev_max = job->syncpt_end = host1x_syncpt_read_max(sp);
 
@@ -191,7 +195,7 @@ static int channel_submit(struct host1x_job *job)
 	/* schedule a submit complete interrupt */
 	err = host1x_intr_add_action(host, sp, syncval,
 				     HOST1X_INTR_ACTION_SUBMIT_COMPLETE, ch,
-				     completed_waiter, NULL);
+				     completed_waiter, &job->waiter);
 	completed_waiter = NULL;
 	WARN(err, "Failed to set submit complete interrupt");
 
