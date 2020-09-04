@@ -67,14 +67,19 @@ struct tegra_drm_context {
 };
 
 struct tegra_drm_client_ops {
-	int (*open_channel)(struct tegra_drm_client *client,
-			    struct tegra_drm_context *context);
-	void (*close_channel)(struct tegra_drm_context *context);
+	int (*power_on)(struct tegra_drm_client *client);
+	void (*power_off)(struct tegra_drm_client *client);
+
 	int (*is_addr_reg)(struct device *dev, u32 class, u32 offset);
 	int (*is_valid_class)(u32 class);
 	int (*submit)(struct tegra_drm_context *context,
 		      struct drm_tegra_submit *args, struct drm_device *drm,
 		      struct drm_file *file);
+
+	/* Legacy UAPI callbacks */
+	int (*open_channel)(struct tegra_drm_client *client,
+			    struct tegra_drm_context *context);
+	void (*close_channel)(struct tegra_drm_context *context);
 };
 
 int tegra_drm_submit(struct tegra_drm_context *context,
