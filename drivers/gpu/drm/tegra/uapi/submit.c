@@ -317,8 +317,7 @@ static int submit_process_bufs(struct drm_device *drm, struct gather_bo *bo,
 			goto drop_refs;
 		}
 
-		if (buf.flags & ~(DRM_TEGRA_SUBMIT_BUF_WRITE_RELOC |
-				  DRM_TEGRA_SUBMIT_BUF_RELOC_BLOCKLINEAR |
+		if (buf.flags & ~(DRM_TEGRA_SUBMIT_BUF_RELOC_BLOCKLINEAR |
 				  DRM_TEGRA_SUBMIT_BUF_RESV_READ |
 				  DRM_TEGRA_SUBMIT_BUF_RESV_WRITE)) {
 			err = -EINVAL;
@@ -338,12 +337,10 @@ static int submit_process_bufs(struct drm_device *drm, struct gather_bo *bo,
 			goto drop_refs;
 		}
 
-		if (buf.flags & DRM_TEGRA_SUBMIT_BUF_WRITE_RELOC) {
-			err = submit_write_reloc(bo, &buf, mapping);
-			if (err) {
-				tegra_drm_mapping_put(mapping);
-				goto drop_refs;
-			}
+		err = submit_write_reloc(bo, &buf, mapping);
+		if (err) {
+			tegra_drm_mapping_put(mapping);
+			goto drop_refs;
 		}
 
 		job_data->used_mappings[i].mapping = mapping;

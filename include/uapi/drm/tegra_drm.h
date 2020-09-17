@@ -785,25 +785,23 @@ struct drm_tegra_channel_unmap {
 
 /* Submission */
 
-/** Patch address of the specified mapping in the submitted gather. */
-#define DRM_TEGRA_SUBMIT_BUF_WRITE_RELOC		(1<<0)
 /**
  * Specify that bit 39 of the patched-in address should be set to
  * trigger layout swizzling between Tegra and non-Tegra Blocklinear
  * layout on systems that store surfaces in system memory in non-Tegra
  * Blocklinear layout.
  */
-#define DRM_TEGRA_SUBMIT_BUF_RELOC_BLOCKLINEAR		(1<<1)
+#define DRM_TEGRA_SUBMIT_BUF_RELOC_BLOCKLINEAR		(1<<0)
 /**
  * Specify that any implicit fences required to read this buffer
  * should be waited before executing the job.
  */
-#define DRM_TEGRA_SUBMIT_BUF_RESV_READ			(1<<2)
+#define DRM_TEGRA_SUBMIT_BUF_RESV_READ			(1<<1)
 /**
  * Specify that any implicit fences required to write this buffer
  * should be waited before executing the job.
  */
-#define DRM_TEGRA_SUBMIT_BUF_RESV_WRITE			(1<<3)
+#define DRM_TEGRA_SUBMIT_BUF_RESV_WRITE			(1<<2)
 
 struct drm_tegra_submit_buf {
 	/**
@@ -820,6 +818,12 @@ struct drm_tegra_submit_buf {
 	 */
 	__u32 flags;
 
+	/**
+	 * Information for relocation patching. Relocation patching will
+	 * be done if the MAP IOCTL that created `mapping_id` did not
+	 * return an IOVA. If an IOVA was returned, the application is
+	 * responsible for patching the address into the gather.
+	 */
 	struct {
 		/**
 		 * @target_offset: [in]
