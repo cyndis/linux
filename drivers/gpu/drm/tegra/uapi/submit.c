@@ -8,6 +8,7 @@
 #include <linux/kref.h>
 #include <linux/list.h>
 #include <linux/nospec.h>
+#include <linux/pm_runtime.h>
 #include <linux/sync_file.h>
 
 #include <drm/drm_drv.h>
@@ -579,8 +580,7 @@ static void release_job(struct host1x_job *job)
 	kfree(job_data->used_mappings);
 	kfree(job_data);
 
-	if (client->ops->power_off)
-		client->ops->power_off(client);
+	pm_runtime_put_autosuspend(client->base.dev);
 }
 
 int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
@@ -631,8 +631,10 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	if (err)
 		goto put_job;
 
-	if (ctx->client->ops->power_on)
-		ctx->client->ops->power_on(ctx->client);
+	err = pm_runtime_get_sync(ctx->client->base.dev);
+	if (err)
+		goto put_pm_runtime;
+
 	job->user_data = job_data;
 	job->release = release_job;
 	job->timeout = min(args->timeout_us / 1000, 10000U);
@@ -647,7 +649,7 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 
 	err = submit_handle_resv(job->user_data, &acquire_ctx);
 	if (err)
-		goto unpin_job;
+		goto put_pm_runtime;
 
 	err = host1x_job_submit(job);
 	if (err)
@@ -664,7 +666,8 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 
 unlock_resv:
 	submit_unlock_resv(job->user_data, &acquire_ctx);
-unpin_job:
+put_pm_runtime:
+	pm_runtime_put(ctx->client->base.dev);
 	host1x_job_unpin(job);
 put_job:
 	host1x_job_put(job);
