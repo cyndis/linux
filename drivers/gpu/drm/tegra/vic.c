@@ -29,7 +29,6 @@ struct vic_config {
 
 struct vic {
 	struct falcon falcon;
-	bool booted;
 
 	void __iomem *regs;
 	struct tegra_drm_client client;
@@ -60,9 +59,6 @@ static int vic_boot(struct vic *vic)
 	u32 fce_ucode_size, fce_bin_data_offset;
 	void *hdr;
 	int err = 0;
-
-	if (vic->booted)
-		return 0;
 
 #ifdef CONFIG_IOMMU_API
 	if (vic->config->supports_sid && spec) {
@@ -110,8 +106,6 @@ static int vic_boot(struct vic *vic)
 			"failed to set application ID and FCE base\n");
 		return err;
 	}
-
-	vic->booted = true;
 
 	return 0;
 }
@@ -314,23 +308,7 @@ static int vic_runtime_suspend(struct device *dev)
 
 	clk_disable_unprepare(vic->clk);
 
-	vic->booted = false;
-
 	return 0;
-}
-
-static int vic_power_on(struct tegra_drm_client *client)
-{
-	struct vic *vic = to_vic(client);
-
-	return pm_runtime_get_sync(vic->dev);
-}
-
-static void vic_power_off(struct tegra_drm_client *client)
-{
-	struct vic *vic = to_vic(client);
-
-	pm_runtime_put(vic->dev);
 }
 
 static int vic_open_channel(struct tegra_drm_client *client,
@@ -339,13 +317,15 @@ static int vic_open_channel(struct tegra_drm_client *client,
 	struct vic *vic = to_vic(client);
 	int err;
 
-	err = vic_power_on(client);
-	if (err < 0)
+	err = pm_runtime_get_sync(vic->dev);
+	if (err < 0) {
+		pm_runtime_put(vic->dev);
 		return err;
+	}
 
 	context->channel = host1x_channel_get(vic->channel);
 	if (!context->channel) {
-		vic_power_off(client);
+		pm_runtime_put(vic->dev);
 		return -ENOMEM;
 	}
 
@@ -354,14 +334,13 @@ static int vic_open_channel(struct tegra_drm_client *client,
 
 static void vic_close_channel(struct tegra_drm_context *context)
 {
-	host1x_channel_put(context->channel);
+	struct vic *vic = to_vic(context->client);
 
-	vic_power_off(context->client);
+	host1x_channel_put(context->channel);
+	pm_runtime_put(vic->dev);
 }
 
 static const struct tegra_drm_client_ops vic_ops = {
-	.power_on = vic_power_on,
-	.power_off = vic_power_off,
 	.open_channel = vic_open_channel,
 	.close_channel = vic_close_channel,
 	.submit = tegra_drm_submit,
