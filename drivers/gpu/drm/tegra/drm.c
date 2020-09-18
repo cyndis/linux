@@ -87,7 +87,7 @@ static int tegra_drm_open(struct drm_device *drm, struct drm_file *filp)
 		return -ENOMEM;
 
 	idr_init(&fpriv->legacy_contexts);
-	xa_init_flags(&fpriv->contexts, XA_FLAGS_ALLOC);
+	xa_init_flags(&fpriv->contexts, XA_FLAGS_ALLOC1);
 	mutex_init(&fpriv->lock);
 	filp->driver_priv = fpriv;
 

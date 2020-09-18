@@ -122,7 +122,7 @@ int tegra_drm_ioctl_channel_open(struct drm_device *drm, void *data,
 		goto put_channel;
 
 	ctx->client = client;
-	xa_init_flags(&ctx->mappings, XA_FLAGS_ALLOC);
+	xa_init_flags(&ctx->mappings, XA_FLAGS_ALLOC1);
 
 	args->hardware_version = client->version;
 
