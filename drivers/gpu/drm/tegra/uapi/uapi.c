@@ -118,10 +118,8 @@ int tegra_drm_ioctl_channel_open(struct drm_device *drm, void *data,
 
 	err = xa_alloc(&fpriv->contexts, &args->channel_ctx, ctx,
 		       XA_LIMIT(1, U32_MAX), GFP_KERNEL);
-	if (err < 0) {
-		mutex_unlock(&fpriv->lock);
+	if (err < 0)
 		goto put_channel;
-	}
 
 	ctx->client = client;
 	xa_init_flags(&ctx->mappings, XA_FLAGS_ALLOC);
