@@ -976,22 +976,7 @@ struct drm_tegra_channel_submit {
 	 */
 	__u32 channel_ctx;
 
-	/**
-	 * @timeout_us: [in]
-	 *
-	 * Timeout in microseconds after which the kernel may consider
-	 * the job hung and may clean up the job and any dependent jobs.
-	 *
-	 * This value may be capped by the kernel.
-	 */
-	__u32 timeout_us;
-
-	/**
-	 * @syncpt_incrs_ptr: [in]
-	 *
-	 * Pointer to an array of drm_tegra_submit_syncpt_incr structures.
-	 */
-	__u64 syncpt_incrs_ptr;
+	__u32 reserved0;
 
 	/**
 	 * @bufs_ptr: [in]
@@ -1016,13 +1001,6 @@ struct drm_tegra_channel_submit {
 	__u64 gather_data_ptr;
 
 	/**
-	 * @num_syncpt_incrs: [in]
-	 *
-	 * Number of elements in the `syncpt_incrs_ptr` array.
-	 */
-	__u32 num_syncpt_incrs;
-
-	/**
 	 * @num_bufs: [in]
 	 *
 	 * Number of elements in the `bufs_ptr` array.
@@ -1043,7 +1021,14 @@ struct drm_tegra_channel_submit {
 	 */
 	__u32 gather_data_words;
 
-	__u32 reserved[4];
+	__u32 reserved1;
+
+	/**
+	 * @syncpt_incrs: [in,out]
+	 *
+	 * Information about each distinct syncpoint the job will increment.
+	 */
+	struct drm_tegra_submit_syncpt_incr syncpt_incrs[2];
 };
 
 #define DRM_IOCTL_TEGRA_CHANNEL_OPEN     DRM_IOWR(DRM_COMMAND_BASE + 0x10, struct drm_tegra_channel_open)
