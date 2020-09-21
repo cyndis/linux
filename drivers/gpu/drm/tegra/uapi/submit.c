@@ -470,22 +470,17 @@ free_job:
 }
 
 static int submit_handle_syncpts(struct drm_device *drm, struct host1x_job *job,
-				 struct drm_tegra_submit_syncpt_incr *incr,
 				 struct drm_tegra_channel_submit *args)
 {
-	struct drm_tegra_submit_syncpt_incr __user *user_incrs_ptr =
-		u64_to_user_ptr(args->syncpt_incrs_ptr);
+	struct drm_tegra_submit_syncpt_incr *incr;
 	struct host1x_syncpt *sp;
-	unsigned long copy_err;
 
-	if (args->num_syncpt_incrs != 1) {
+	if (args->syncpt_incrs[1].num_incrs != 0) {
 		drm_info(drm, "Only 1 syncpoint supported for now");
 		return -EINVAL;
 	}
 
-	copy_err = copy_from_user(incr, user_incrs_ptr, sizeof(*incr));
-	if (copy_err)
-		return -EFAULT;
+	incr = &args->syncpt_incrs[0];
 
 	if ((incr->flags & ~DRM_TEGRA_SUBMIT_SYNCPT_INCR_CREATE_SYNC_FILE) ||
 	    incr->reserved[0] || incr->reserved[1] || incr->reserved[2])
@@ -503,9 +498,9 @@ static int submit_handle_syncpts(struct drm_device *drm, struct host1x_job *job,
 }
 
 static int submit_create_postfences(struct host1x_job *job,
-				    struct drm_tegra_submit_syncpt_incr *incr,
 				    struct drm_tegra_channel_submit *args)
 {
+	struct drm_tegra_submit_syncpt_incr *incr = &args->syncpt_incrs[0];
 	struct tegra_drm_job_data *job_data = job->user_data;
 	struct dma_fence *fence;
 	int err = 0;
@@ -552,21 +547,6 @@ put_fence:
 	return err;
 }
 
-static int submit_copy_postfences(struct drm_tegra_submit_syncpt_incr *incr,
-				  struct drm_tegra_channel_submit *args)
-{
-	unsigned long copy_err;
-
-	struct drm_tegra_submit_syncpt_incr __user *user_incrs_ptr =
-		u64_to_user_ptr(args->syncpt_incrs_ptr);
-
-	copy_err = copy_to_user(user_incrs_ptr, incr, sizeof(*incr));
-	if (copy_err)
-		return -EFAULT;
-
-	return 0;
-}
-
 static void release_job(struct host1x_job *job)
 {
 	struct tegra_drm_client *client =
@@ -588,7 +568,6 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 {
 	struct tegra_drm_file *fpriv = file->driver_priv;
 	struct drm_tegra_channel_submit *args = data;
-	struct drm_tegra_submit_syncpt_incr incr;
 	struct tegra_drm_job_data *job_data;
 	struct ww_acquire_ctx acquire_ctx;
 	struct tegra_drm_channel_ctx *ctx;
@@ -597,8 +576,7 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	u32 i;
 	int err;
 
-	if (args->reserved[0] || args->reserved[1] || args->reserved[2] ||
-	    args->reserved[3])
+	if (args->reserved0 || args->reserved1)
 		return -EINVAL;
 
 	ctx = tegra_drm_channel_ctx_lock(fpriv, args->channel_ctx);
@@ -623,7 +601,7 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	if (err)
 		goto free_job_data;
 
-	err = submit_handle_syncpts(drm, job, &incr, args);
+	err = submit_handle_syncpts(drm, job, args);
 	if (err)
 		goto put_job;
 
@@ -637,9 +615,7 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 
 	job->user_data = job_data;
 	job->release = release_job;
-	job->timeout = min(args->timeout_us / 1000, 10000U);
-	if (job->timeout == 0)
-		job->timeout = 1;
+	job->timeout = 10000;
 
 	/*
 	 * job_data is now part of job reference counting, so don't release
@@ -655,12 +631,9 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	if (err)
 		goto unlock_resv;
 
-	err = submit_create_postfences(job, &incr, args);
+	err = submit_create_postfences(job, args);
 
 	submit_unlock_resv(job->user_data, &acquire_ctx);
-
-	if (err == 0)
-		err = submit_copy_postfences(&incr, args);
 
 	goto put_job;
 
