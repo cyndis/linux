@@ -235,8 +235,11 @@ static void submit_unlock_resv(struct tegra_drm_job_data *job_data,
 }
 
 static int submit_handle_resv(struct tegra_drm_job_data *job_data,
-			      struct ww_acquire_ctx *acquire_ctx)
+			      struct ww_acquire_ctx *acquire_ctx,
+			      struct xarray *implicit_fences)
 {
+	struct tegra_drm_used_mapping *mappings = job_data->used_mappings;
+	struct tegra_bo *bo;
 	int contended = -1;
 	int err;
 	u32 i;
@@ -247,11 +250,9 @@ static int submit_handle_resv(struct tegra_drm_job_data *job_data,
 
 retry:
 	if (contended != -1) {
-		struct tegra_bo *bo = host1x_to_tegra_bo(
-			job_data->used_mappings[contended].mapping->bo);
+		bo = host1x_to_tegra_bo(mappings[contended].mapping->bo);
 
-		err = dma_resv_lock_slow_interruptible(bo->gem.resv,
-						       acquire_ctx);
+		err = dma_resv_lock_slow_interruptible(bo->gem.resv, acquire_ctx);
 		if (err) {
 			ww_acquire_done(acquire_ctx);
 			return err;
@@ -259,8 +260,7 @@ retry:
 	}
 
 	for (i = 0; i < job_data->num_used_mappings; i++) {
-		struct tegra_bo *bo = host1x_to_tegra_bo(
-			job_data->used_mappings[contended].mapping->bo);
+		bo = host1x_to_tegra_bo(mappings[contended].mapping->bo);
 
 		if (i == contended)
 			continue;
@@ -270,14 +270,12 @@ retry:
 			int j;
 
 			for (j = 0; j < i; j++) {
-				bo = host1x_to_tegra_bo(
-					job_data->used_mappings[j].mapping->bo);
+				bo = host1x_to_tegra_bo(mappings[j].mapping->bo);
 				dma_resv_unlock(bo->gem.resv);
 			}
 
 			if (contended != -1 && contended >= i) {
-				bo = host1x_to_tegra_bo(
-					job_data->used_mappings[contended].mapping->bo);
+				bo = host1x_to_tegra_bo(mappings[contended].mapping->bo);
 				dma_resv_unlock(bo->gem.resv);
 			}
 
@@ -294,12 +292,20 @@ retry:
 	ww_acquire_done(acquire_ctx);
 
 	for (i = 0; i < job_data->num_used_mappings; i++) {
-		struct tegra_drm_used_mapping *um = &job_data->used_mappings[i];
-		struct tegra_bo *bo = host1x_to_tegra_bo(
-			job_data->used_mappings[i].mapping->bo);
+		bo = host1x_to_tegra_bo(mappings[i].mapping->bo);
 
-		if (um->flags & DRM_TEGRA_SUBMIT_BUF_RESV_READ) {
+		if (mappings[i].flags & DRM_TEGRA_SUBMIT_BUF_RESV_WRITE) {
+			err = drm_gem_fence_array_add_implicit(implicit_fences,
+							       &bo->gem, true);
+			if (err < 0)
+				goto unlock_resv;
+		} else if (mappings[i].flags & DRM_TEGRA_SUBMIT_BUF_RESV_READ) {
 			err = dma_resv_reserve_shared(bo->gem.resv, 1);
+			if (err < 0)
+				goto unlock_resv;
+
+			err = drm_gem_fence_array_add_implicit(implicit_fences,
+							       &bo->gem, false);
 			if (err < 0)
 				goto unlock_resv;
 		}
@@ -317,7 +323,8 @@ static int submit_process_bufs(struct drm_device *drm, struct gather_bo *bo,
 			       struct tegra_drm_job_data *job_data,
 			       struct tegra_drm_channel_ctx *ctx,
 			       struct drm_tegra_channel_submit *args,
-			       struct ww_acquire_ctx *acquire_ctx)
+			       struct ww_acquire_ctx *acquire_ctx,
+			       bool *need_implicit_fences)
 {
 	struct tegra_drm_used_mapping *mappings;
 	struct drm_tegra_submit_buf *bufs;
@@ -334,6 +341,8 @@ static int submit_process_bufs(struct drm_device *drm, struct gather_bo *bo,
 		err = -ENOMEM;
 		goto done;
 	}
+
+	*need_implicit_fences = false;
 
 	for (i = 0; i < args->num_bufs; i++) {
 		struct drm_tegra_submit_buf *buf = &bufs[i];
@@ -367,6 +376,10 @@ static int submit_process_bufs(struct drm_device *drm, struct gather_bo *bo,
 
 		mappings[i].mapping = mapping;
 		mappings[i].flags = buf->flags;
+
+		if (buf->flags & (DRM_TEGRA_SUBMIT_BUF_RESV_READ |
+				  DRM_TEGRA_SUBMIT_BUF_RESV_WRITE))
+			*need_implicit_fences = true;
 	}
 
 	job_data->used_mappings = mappings;
@@ -393,15 +406,45 @@ done:
 	return err;
 }
 
+static int submit_get_syncpt(struct drm_device *drm, struct host1x_job *job,
+			     struct drm_tegra_channel_submit *args)
+{
+	struct drm_tegra_submit_syncpt_incr *incr;
+	struct host1x_syncpt *sp;
+
+	if (args->syncpt_incrs[1].num_incrs != 0) {
+		drm_info(drm, "Only 1 syncpoint supported for now");
+		return -EINVAL;
+	}
+
+	incr = &args->syncpt_incrs[0];
+
+	if ((incr->flags & ~DRM_TEGRA_SUBMIT_SYNCPT_INCR_CREATE_SYNC_FILE) ||
+	    incr->reserved[0] || incr->reserved[1] || incr->reserved[2])
+		return -EINVAL;
+
+	/* Syncpt ref will be dropped on job release */
+	sp = host1x_syncpt_fd_get(incr->syncpt_fd);
+	if (IS_ERR(sp))
+		return PTR_ERR(sp);
+
+	job->syncpt = sp;
+	job->syncpt_incrs = incr->num_incrs;
+
+	return 0;
+}
+
 static int submit_create_job(struct drm_device *drm, struct host1x_job **pjob,
 			     struct gather_bo *bo,
 			     struct tegra_drm_channel_ctx *ctx,
 			     struct drm_tegra_channel_submit *args,
-			     struct drm_file *file)
+			     struct drm_file *file,
+			     bool need_implicit_fences)
 {
 	struct drm_tegra_submit_cmd *cmds;
 	u32 i, gather_offset = 0;
 	struct host1x_job *job;
+	u32 num_cmds;
 	int err;
 
 	cmds = alloc_copy_user_array(u64_to_user_ptr(args->cmds_ptr),
@@ -409,15 +452,28 @@ static int submit_create_job(struct drm_device *drm, struct host1x_job **pjob,
 	if (IS_ERR(cmds))
 		return PTR_ERR(cmds);
 
-	job = host1x_job_alloc(ctx->channel, args->num_cmds, 0);
+	num_cmds = args->num_cmds;
+	if (need_implicit_fences)
+		num_cmds++;
+
+	job = host1x_job_alloc(ctx->channel, num_cmds, 0);
 	if (!job) {
 		err = -ENOMEM;
 		goto done;
 	}
 
+	err = submit_get_syncpt(drm, job, args);
+	if (err < 0)
+		goto free_job;
+
 	job->client = &ctx->client->base;
 	job->class = ctx->client->base.class;
 	job->serialize = true;
+
+	if (need_implicit_fences) {
+		u32 threshold = host1x_syncpt_incr_max(job->syncpt, 1) - 1;
+		host1x_job_add_wait(job, host1x_syncpt_id(job->syncpt), threshold);
+	}
 
 	for (i = 0; i < args->num_cmds; i++) {
 		struct drm_tegra_submit_cmd *cmd = &cmds[i];
@@ -502,34 +558,6 @@ done:
 	return err;
 }
 
-static int submit_handle_syncpts(struct drm_device *drm, struct host1x_job *job,
-				 struct drm_tegra_channel_submit *args)
-{
-	struct drm_tegra_submit_syncpt_incr *incr;
-	struct host1x_syncpt *sp;
-
-	if (args->syncpt_incrs[1].num_incrs != 0) {
-		drm_info(drm, "Only 1 syncpoint supported for now");
-		return -EINVAL;
-	}
-
-	incr = &args->syncpt_incrs[0];
-
-	if ((incr->flags & ~DRM_TEGRA_SUBMIT_SYNCPT_INCR_CREATE_SYNC_FILE) ||
-	    incr->reserved[0] || incr->reserved[1] || incr->reserved[2])
-		return -EINVAL;
-
-	/* Syncpt ref will be dropped on job release */
-	sp = host1x_syncpt_fd_get(incr->syncpt_fd);
-	if (IS_ERR(sp))
-		return PTR_ERR(sp);
-
-	job->syncpt = sp;
-	job->syncpt_incrs = incr->num_incrs;
-
-	return 0;
-}
-
 static int submit_create_postfences(struct host1x_job *job,
 				    struct drm_tegra_channel_submit *args)
 {
@@ -604,6 +632,8 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	struct tegra_drm_job_data *job_data;
 	struct ww_acquire_ctx acquire_ctx;
 	struct tegra_drm_channel_ctx *ctx;
+	DEFINE_XARRAY(implicit_fences);
+	bool need_implicit_fences;
 	struct host1x_job *job;
 	struct gather_bo *bo;
 	u32 i;
@@ -628,19 +658,16 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	}
 
 	/* Get data buffer mappings and do relocation patching. */
-	err = submit_process_bufs(drm, bo, job_data, ctx, args, &acquire_ctx);
+	err = submit_process_bufs(drm, bo, job_data, ctx, args, &acquire_ctx,
+				  &need_implicit_fences);
 	if (err)
 		goto free_job_data;
 
-	/* Allocate host1x_job and add gathers and waits from cmds into it. */
-	err = submit_create_job(drm, &job, bo, ctx, args, file);
+	/* Allocate host1x_job and add gathers and waits to it. */
+	err = submit_create_job(drm, &job, bo, ctx, args, file,
+				need_implicit_fences);
 	if (err)
 		goto free_job_data;
-
-	/* Get syncpoint handles for increments and configure to host1x_job. */
-	err = submit_handle_syncpts(drm, job, args);
-	if (err)
-		goto put_job;
 
 	/* Map gather data for Host1x. */
 	err = host1x_job_pin(job, ctx->client->base.dev);
@@ -662,10 +689,16 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	 */
 	job_data = NULL;
 
-	/* Lock DMA reservations and reserve fence slots. */
-	err = submit_handle_resv(job->user_data, &acquire_ctx);
-	if (err)
-		goto put_pm_runtime;
+	if (need_implicit_fences) {
+		/*
+		 * Lock DMA reservations, reserve fence slots and
+		 * retrieve prefences.
+		 */
+		err = submit_handle_resv(job->user_data, &acquire_ctx,
+					 &implicit_fences);
+		if (err)
+			goto put_pm_runtime;
+	}
 
 	/* Submit job to hardware. */
 	err = host1x_job_submit(job);
@@ -675,13 +708,30 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	/* Return postfences to userspace and add fences to DMA reservations. */
 	err = submit_create_postfences(job, args);
 
-	/* Unlock DMA reservations. */
-	submit_unlock_resv(job->user_data, &acquire_ctx);
+	if (need_implicit_fences) {
+		struct dma_fence *fence;
+		unsigned long index;
+		int err = 0;
+
+		/* Unlock DMA reservations. */
+		submit_unlock_resv(job->user_data, &acquire_ctx);
+
+		/* Wait for fences and unblock job. */
+		xa_for_each(&implicit_fences, index, fence) {
+			err = dma_fence_wait(fence, false);
+			if (err < 0)
+				break;
+		}
+
+		if (err == 0)
+			host1x_syncpt_incr(job->syncpt);
+	}
 
 	goto put_job;
 
 unlock_resv:
-	submit_unlock_resv(job->user_data, &acquire_ctx);
+	if (need_implicit_fences)
+		submit_unlock_resv(job->user_data, &acquire_ctx);
 put_pm_runtime:
 	pm_runtime_put(ctx->client->base.dev);
 	host1x_job_unpin(job);
