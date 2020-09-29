@@ -10,6 +10,4 @@ struct host1x_syncpt_fence;
 
 bool host1x_fence_signal(struct host1x_syncpt_fence *fence);
 
-int host1x_fence_extract(struct dma_fence *fence, u32 *id, u32 *threshold);
-
 #endif
