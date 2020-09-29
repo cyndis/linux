@@ -169,7 +169,8 @@ static int dev_file_ioctl_alloc_syncpoint(struct host1x *host1x,
 	if (args.reserved[0] || args.reserved[1] || args.reserved[2])
 		return -EINVAL;
 
-	sp = host1x_syncpt_alloc(host1x, NULL, HOST1X_SYNCPT_CLIENT_MANAGED);
+	sp = host1x_syncpt_alloc(host1x, HOST1X_SYNCPT_CLIENT_MANAGED,
+				 current->comm);
 	if (!sp)
 		return -EBUSY;
 
