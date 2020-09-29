@@ -122,11 +122,6 @@ static inline int host1x_syncpt_is_valid(struct host1x_syncpt *sp)
 	return sp->id < host1x_syncpt_nb_pts(sp->host);
 }
 
-/* Allocate a syncpoint. */
-struct host1x_syncpt *host1x_syncpt_alloc(struct host1x *host,
-					  struct host1x_client *client,
-					  unsigned long flags);
-
 static inline void host1x_syncpt_set_locked(struct host1x_syncpt *sp)
 {
 	sp->locked = true;
