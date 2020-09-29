@@ -236,6 +236,10 @@ static int submit_job_add_gather(struct host1x_job *job,
 	if (next_offset > bo->gather_data_words)
 		return -EINVAL;
 
+	if (tegra_drm_fw_validate(ctx->client, bo->gather_data, *offset,
+				  cmd->words, job_data))
+		return -EINVAL;
+
 	host1x_job_add_gather(job, &bo->base, cmd->words, *offset * 4);
 
 	*offset = next_offset;
