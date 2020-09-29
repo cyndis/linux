@@ -18,6 +18,9 @@
 #include "../drm.h"
 #include "../gem.h"
 
+#include "gather_bo.h"
+#include "submit.h"
+
 static struct tegra_drm_mapping *
 tegra_drm_mapping_get(struct tegra_drm_channel_ctx *ctx, u32 id)
 {
@@ -53,104 +56,6 @@ static void *alloc_copy_user_array(void __user *from, size_t count, size_t size)
 
 	return data;
 }
-
-struct gather_bo {
-	struct host1x_bo base;
-
-	struct kref ref;
-
-	u32 *gather_data;
-	size_t gather_data_len;
-};
-
-static struct host1x_bo *gather_bo_get(struct host1x_bo *host_bo)
-{
-	struct gather_bo *bo = container_of(host_bo, struct gather_bo, base);
-
-	kref_get(&bo->ref);
-
-	return host_bo;
-}
-
-static void gather_bo_release(struct kref *ref)
-{
-	struct gather_bo *bo = container_of(ref, struct gather_bo, ref);
-
-	kfree(bo->gather_data);
-	kfree(bo);
-}
-
-static void gather_bo_put(struct host1x_bo *host_bo)
-{
-	struct gather_bo *bo = container_of(host_bo, struct gather_bo, base);
-
-	kref_put(&bo->ref, gather_bo_release);
-}
-
-static struct sg_table *
-gather_bo_pin(struct device *dev, struct host1x_bo *host_bo, dma_addr_t *phys)
-{
-	struct gather_bo *bo = container_of(host_bo, struct gather_bo, base);
-	struct sg_table *sgt;
-	int err;
-
-	if (phys) {
-		*phys = virt_to_phys(bo->gather_data);
-		return NULL;
-	}
-
-	sgt = kzalloc(sizeof(*sgt), GFP_KERNEL);
-	if (!sgt)
-		return ERR_PTR(-ENOMEM);
-
-	err = sg_alloc_table(sgt, 1, GFP_KERNEL);
-	if (err) {
-		kfree(sgt);
-		return ERR_PTR(err);
-	}
-
-	sg_init_one(sgt->sgl, bo->gather_data, bo->gather_data_len);
-
-	return sgt;
-}
-
-static void gather_bo_unpin(struct device *dev, struct sg_table *sgt)
-{
-	if (sgt) {
-		sg_free_table(sgt);
-		kfree(sgt);
-	}
-}
-
-static void *gather_bo_mmap(struct host1x_bo *host_bo)
-{
-	struct gather_bo *bo = container_of(host_bo, struct gather_bo, base);
-
-	return bo->gather_data;
-}
-
-static void gather_bo_munmap(struct host1x_bo *host_bo, void *addr)
-{
-}
-
-static const struct host1x_bo_ops gather_bo_ops = {
-	.get = gather_bo_get,
-	.put = gather_bo_put,
-	.pin = gather_bo_pin,
-	.unpin = gather_bo_unpin,
-	.mmap = gather_bo_mmap,
-	.munmap = gather_bo_munmap,
-};
-
-struct tegra_drm_used_mapping {
-	struct tegra_drm_mapping *mapping;
-	u32 flags;
-};
-
-struct tegra_drm_job_data {
-	struct tegra_drm_used_mapping *used_mappings;
-	u32 num_used_mappings;
-};
 
 static int submit_copy_gather_data(struct drm_device *drm,
 				   struct gather_bo **pbo,
@@ -219,7 +124,7 @@ static int submit_write_reloc(struct gather_bo *bo,
 	return 0;
 }
 
-static void submit_unlock_resv(struct tegra_drm_job_data *job_data,
+static void submit_unlock_resv(struct tegra_drm_submit_data *job_data,
 			       struct ww_acquire_ctx *acquire_ctx)
 {
 	u32 i;
@@ -234,7 +139,7 @@ static void submit_unlock_resv(struct tegra_drm_job_data *job_data,
 	ww_acquire_fini(acquire_ctx);
 }
 
-static int submit_handle_resv(struct tegra_drm_job_data *job_data,
+static int submit_handle_resv(struct tegra_drm_submit_data *job_data,
 			      struct ww_acquire_ctx *acquire_ctx,
 			      struct xarray *implicit_fences)
 {
@@ -320,7 +225,7 @@ unlock_resv:
 }
 
 static int submit_process_bufs(struct drm_device *drm, struct gather_bo *bo,
-			       struct tegra_drm_job_data *job_data,
+			       struct tegra_drm_submit_data *job_data,
 			       struct tegra_drm_channel_ctx *ctx,
 			       struct drm_tegra_channel_submit *args,
 			       struct ww_acquire_ctx *acquire_ctx,
@@ -434,11 +339,39 @@ static int submit_get_syncpt(struct drm_device *drm, struct host1x_job *job,
 	return 0;
 }
 
+static int submit_job_add_gather(struct host1x_job *job,
+				 struct tegra_drm_channel_ctx *ctx,
+				 struct drm_tegra_submit_cmd_gather_uptr *cmd,
+				 struct gather_bo *bo, u32 *offset,
+				 struct tegra_drm_submit_data *job_data)
+{
+	u32 next_offset;
+
+	if (cmd->reserved[0] || cmd->reserved[1] || cmd->reserved[2])
+		return -EINVAL;
+
+	/* Check for maximum gather size */
+	if (cmd->words > 16383)
+		return -EINVAL;
+
+	if (check_add_overflow(*offset, cmd->words, &next_offset))
+		return -EINVAL;
+
+	if (next_offset > bo->gather_data_len)
+		return -EINVAL;
+
+	host1x_job_add_gather(job, &bo->base, cmd->words, *offset * 4);
+
+	*offset = next_offset;
+
+	return 0;
+}
+
 static int submit_create_job(struct drm_device *drm, struct host1x_job **pjob,
 			     struct gather_bo *bo,
 			     struct tegra_drm_channel_ctx *ctx,
 			     struct drm_tegra_channel_submit *args,
-			     struct drm_file *file,
+			     struct tegra_drm_submit_data *job_data,
 			     bool need_implicit_fences)
 {
 	struct drm_tegra_submit_cmd *cmds;
@@ -479,29 +412,8 @@ static int submit_create_job(struct drm_device *drm, struct host1x_job **pjob,
 		struct drm_tegra_submit_cmd *cmd = &cmds[i];
 
 		if (cmd->type == DRM_TEGRA_SUBMIT_CMD_GATHER_UPTR) {
-			if (cmd->gather_uptr.reserved[0] ||
-			    cmd->gather_uptr.reserved[1] ||
-			    cmd->gather_uptr.reserved[2]) {
-				err = -EINVAL;
-				goto free_job;
-			}
-
-			/* Check for maximum gather size */
-			if (cmd->gather_uptr.words > 16383) {
-				err = -EINVAL;
-				goto free_job;
-			}
-
-			host1x_job_add_gather(job, &bo->base,
-					      cmd->gather_uptr.words,
-					      gather_offset*4);
-
-			gather_offset += cmd->gather_uptr.words;
-
-			if (gather_offset > bo->gather_data_len) {
-				err = -EINVAL;
-				goto free_job;
-			}
+			submit_job_add_gather(job, ctx, &cmd->gather_uptr, bo,
+					      &gather_offset, job_data);
 		} else if (cmd->type == DRM_TEGRA_SUBMIT_CMD_WAIT_SYNCPT) {
 			if (cmd->wait_syncpt.reserved[0] ||
 			    cmd->wait_syncpt.reserved[1]) {
@@ -562,7 +474,7 @@ static int submit_create_postfences(struct host1x_job *job,
 				    struct drm_tegra_channel_submit *args)
 {
 	struct drm_tegra_submit_syncpt_incr *incr = &args->syncpt_incrs[0];
-	struct tegra_drm_job_data *job_data = job->user_data;
+	struct tegra_drm_submit_data *job_data = job->user_data;
 	struct dma_fence *fence;
 	int err = 0;
 	u32 i;
@@ -612,7 +524,7 @@ static void release_job(struct host1x_job *job)
 {
 	struct tegra_drm_client *client =
 		container_of(job->client, struct tegra_drm_client, base);
-	struct tegra_drm_job_data *job_data = job->user_data;
+	struct tegra_drm_submit_data *job_data = job->user_data;
 	u32 i;
 
 	for (i = 0; i < job_data->num_used_mappings; i++)
@@ -629,7 +541,7 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 {
 	struct tegra_drm_file *fpriv = file->driver_priv;
 	struct drm_tegra_channel_submit *args = data;
-	struct tegra_drm_job_data *job_data;
+	struct tegra_drm_submit_data *job_data;
 	struct ww_acquire_ctx acquire_ctx;
 	struct tegra_drm_channel_ctx *ctx;
 	DEFINE_XARRAY(implicit_fences);
@@ -664,8 +576,8 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 		goto free_job_data;
 
 	/* Allocate host1x_job and add gathers and waits to it. */
-	err = submit_create_job(drm, &job, bo, ctx, args, file,
-				need_implicit_fences);
+	err = submit_create_job(drm, &job, bo, ctx, args,
+				job_data, need_implicit_fences);
 	if (err)
 		goto free_job_data;
 
@@ -746,7 +658,7 @@ free_job_data:
 	if (job_data)
 		kfree(job_data);
 put_bo:
-	kref_put(&bo->ref, gather_bo_release);
+	gather_bo_put(&bo->base);
 unlock:
 	mutex_unlock(&fpriv->lock);
 	return err;
