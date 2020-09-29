@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2020 NVIDIA Corporation */
 
-#ifndef _TEGRA_DRM_CHANNEL_UAPI_H
-#define _TEGRA_DRM_CHANNEL_UAPI_H
+#ifndef _TEGRA_DRM_UAPI_H
+#define _TEGRA_DRM_UAPI_H
 
 #include <linux/dma-mapping.h>
 #include <linux/idr.h>
@@ -10,6 +10,9 @@
 #include <linux/xarray.h>
 
 #include <drm/drm.h>
+
+struct drm_file;
+struct drm_device;
 
 struct tegra_drm_file {
 	/* Legacy UAPI state */
@@ -34,6 +37,7 @@ struct tegra_drm_mapping {
 	struct sg_table *sgt;
 	enum dma_data_direction direction;
 	dma_addr_t iova;
+	dma_addr_t iova_end;
 };
 
 int tegra_drm_ioctl_channel_open(struct drm_device *drm, void *data,

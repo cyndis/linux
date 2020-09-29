@@ -229,8 +229,8 @@ int tegra_drm_ioctl_channel_map(struct drm_device *drm, void *data,
 			goto unpin;
 
 		/* TODO only map the requested part */
-		mapping->iova =
-			sg_dma_address(mapping->sgt->sgl) + args->offset;
+		mapping->iova = sg_dma_address(mapping->sgt->sgl) + args->offset;
+		mapping->iova_end = mapping->iova + gem->size;
 	}
 
 	mutex_unlock(&fpriv->lock);
