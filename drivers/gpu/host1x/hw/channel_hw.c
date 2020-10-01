@@ -144,10 +144,6 @@ static int channel_submit(struct host1x_job *job)
 				    job->num_cmds, job->num_relocs,
 				    job->syncpt->id, job->syncpt_incrs);
 
-	/* TODO this is racy */
-	if (job->syncpt->locked)
-		return -EPERM;
-
 	/* before error checks, return current max */
 	prev_max = job->syncpt_end = host1x_syncpt_read_max(sp);
 
