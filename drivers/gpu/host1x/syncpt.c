@@ -68,7 +68,7 @@ struct host1x_syncpt *host1x_syncpt_alloc(struct host1x *host,
 	if (!full_name)
 		goto free_base;
 
-	sp->name = name;
+	sp->name = full_name;
 
 	if (flags & HOST1X_SYNCPT_CLIENT_MANAGED)
 		sp->client_managed = true;
