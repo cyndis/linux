@@ -595,7 +595,7 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 
 	/* Boot engine. */
 	err = pm_runtime_get_sync(ctx->client->base.dev);
-	if (err)
+	if (err < 0)
 		goto put_pm_runtime;
 
 	job->user_data = job_data;
