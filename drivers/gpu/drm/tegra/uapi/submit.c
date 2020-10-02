@@ -416,8 +416,11 @@ static int submit_create_job(struct drm_device *drm, struct host1x_job **pjob,
 		struct drm_tegra_submit_cmd *cmd = &cmds[i];
 
 		if (cmd->type == DRM_TEGRA_SUBMIT_CMD_GATHER_UPTR) {
-			submit_job_add_gather(job, ctx, &cmd->gather_uptr, bo,
-					      &gather_offset, job_data);
+			err = submit_job_add_gather(job, ctx, &cmd->gather_uptr,
+						    bo, &gather_offset,
+						    job_data);
+			if (err)
+				goto free_job;
 		} else if (cmd->type == DRM_TEGRA_SUBMIT_CMD_WAIT_SYNCPT) {
 			if (cmd->wait_syncpt.reserved[0] ||
 			    cmd->wait_syncpt.reserved[1]) {
