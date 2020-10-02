@@ -11,12 +11,12 @@ struct tegra_drm_firewall {
 	struct tegra_drm_client *client;
 	u32 *data;
 	u32 pos;
-	u32 words;
+	u32 end;
 };
 
 static int fw_next(struct tegra_drm_firewall *fw, u32 *word)
 {
-	if (fw->pos == fw->words)
+	if (fw->pos == fw->end)
 		return -EINVAL;
 
 	*word = fw->data[fw->pos++];
@@ -48,6 +48,9 @@ static int fw_check_reg(struct tegra_drm_firewall *fw, u32 offset)
 	if (err)
 		return err;
 
+	if (!fw->client->ops->is_addr_reg)
+		return 0;
+
 	is_addr = fw->client->ops->is_addr_reg(
 		fw->client->base.dev, fw->client->base.class, offset);
 
@@ -66,7 +69,7 @@ static int fw_check_regs_seq(struct tegra_drm_firewall *fw, u32 offset,
 	u32 i;
 
 	for (i = 0; i < count; i++) {
-		if (!fw_check_reg(fw, offset))
+		if (fw_check_reg(fw, offset))
 			return -EINVAL;
 
 		if (incr)
@@ -83,7 +86,7 @@ static int fw_check_regs_mask(struct tegra_drm_firewall *fw, u32 offset,
 	unsigned int bit;
 
 	for_each_set_bit(bit, &bmask, 16) {
-		if (!fw_check_reg(fw, offset+bit))
+		if (fw_check_reg(fw, offset+bit))
 			return -EINVAL;
 	}
 
@@ -128,13 +131,13 @@ int tegra_drm_fw_validate(struct tegra_drm_client *client, u32 *data, u32 start,
 		.client = client,
 		.data = data,
 		.pos = start,
-		.words = words,
+		.end = start+words,
 	};
 	bool payload_valid = false;
 	u32 payload;
 	int err;
 
-	while (fw.pos != fw.words) {
+	while (fw.pos != fw.end) {
 		u32 word, opcode, offset, count, mask;
 
 		err = fw_next(&fw, &word);
