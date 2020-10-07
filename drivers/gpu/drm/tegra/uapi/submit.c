@@ -609,6 +609,8 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	job_data = NULL;
 
 	if (need_implicit_fences) {
+		xa_init_flags(&implicit_fences, XA_FLAGS_ALLOC);
+
 		/*
 		 * Lock DMA reservations, reserve fence slots and
 		 * retrieve prefences.
@@ -642,6 +644,8 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 				break;
 		}
 
+		xa_destroy(&implicit_fences);
+
 		if (err == 0)
 			host1x_syncpt_incr(job->syncpt);
 	}
@@ -649,8 +653,10 @@ int tegra_drm_ioctl_channel_submit(struct drm_device *drm, void *data,
 	goto put_job;
 
 unlock_resv:
-	if (need_implicit_fences)
+	if (need_implicit_fences) {
 		submit_unlock_resv(job->user_data, &acquire_ctx);
+		xa_destroy(&implicit_fences);
+	}
 put_pm_runtime:
 	pm_runtime_put(ctx->client->base.dev);
 	host1x_job_unpin(job);
