@@ -165,7 +165,7 @@ retry:
 	}
 
 	for (i = 0; i < job_data->num_used_mappings; i++) {
-		bo = host1x_to_tegra_bo(mappings[contended].mapping->bo);
+		bo = host1x_to_tegra_bo(mappings[i].mapping->bo);
 
 		if (i == contended)
 			continue;
