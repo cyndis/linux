@@ -95,7 +95,7 @@ static int submit_copy_gather_data(struct drm_device *drm,
 		return -EFAULT;
 	}
 
-	bo->gather_data_len = args->gather_data_words;
+	bo->gather_data_words = args->gather_data_words;
 
 	*pbo = bo;
 
@@ -113,11 +113,11 @@ static int submit_write_reloc(struct gather_bo *bo,
 	if (buf->flags & DRM_TEGRA_SUBMIT_BUF_RELOC_BLOCKLINEAR)
 		written_ptr |= BIT(39);
 
-	if (buf->reloc.gather_offset_words >= bo->gather_data_len)
+	if (buf->reloc.gather_offset_words >= bo->gather_data_words)
 		return -EINVAL;
 
 	buf->reloc.gather_offset_words = array_index_nospec(
-		buf->reloc.gather_offset_words, bo->gather_data_len);
+		buf->reloc.gather_offset_words, bo->gather_data_words);
 
 	bo->gather_data[buf->reloc.gather_offset_words] = written_ptr;
 
@@ -357,7 +357,7 @@ static int submit_job_add_gather(struct host1x_job *job,
 	if (check_add_overflow(*offset, cmd->words, &next_offset))
 		return -EINVAL;
 
-	if (next_offset > bo->gather_data_len)
+	if (next_offset > bo->gather_data_words)
 		return -EINVAL;
 
 	if (tegra_drm_fw_validate(ctx->client, bo->gather_data, *offset,

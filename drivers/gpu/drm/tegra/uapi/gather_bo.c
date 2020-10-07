@@ -52,7 +52,7 @@ gather_bo_pin(struct device *dev, struct host1x_bo *host_bo, dma_addr_t *phys)
 		return ERR_PTR(err);
 	}
 
-	sg_init_one(sgt->sgl, bo->gather_data, bo->gather_data_len);
+	sg_init_one(sgt->sgl, bo->gather_data, bo->gather_data_words*4);
 
 	return sgt;
 }

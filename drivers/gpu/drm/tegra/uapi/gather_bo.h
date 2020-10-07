@@ -13,7 +13,7 @@ struct gather_bo {
 	struct kref ref;
 
 	u32 *gather_data;
-	size_t gather_data_len;
+	size_t gather_data_words;
 };
 
 extern const struct host1x_bo_ops gather_bo_ops;
