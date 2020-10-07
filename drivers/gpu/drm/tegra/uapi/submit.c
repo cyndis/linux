@@ -658,7 +658,8 @@ unlock_resv:
 		xa_destroy(&implicit_fences);
 	}
 put_pm_runtime:
-	pm_runtime_put(ctx->client->base.dev);
+	if (!job->release)
+		pm_runtime_put(ctx->client->base.dev);
 	host1x_job_unpin(job);
 put_job:
 	host1x_job_put(job);
