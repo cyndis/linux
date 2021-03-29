@@ -1474,7 +1474,7 @@
 		clock-names = "gpu", "pwr";
 		resets = <&bpmp TEGRA186_RESET_GPU>;
 		reset-names = "gpu";
-		status = "disabled";
+		status = "okay";
 
 		power-domains = <&bpmp TEGRA186_POWER_DOMAIN_GPU>;
 		interconnects = <&mc TEGRA186_MEMORY_CLIENT_GPUSRD &emc>,
