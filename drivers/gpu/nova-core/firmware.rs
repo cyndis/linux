@@ -5,16 +5,21 @@
 
 use core::marker::PhantomData;
 
+use booter::BooterFirmware;
 use kernel::device;
 use kernel::firmware;
 use kernel::prelude::*;
 use kernel::str::CString;
+use kernel::transmute::FromBytesSized;
 
 use crate::dma::DmaObject;
+use crate::driver::Bar0;
 use crate::falcon::FalconFirmware;
+use crate::falcon::{sec2::Sec2, Falcon};
 use crate::gpu;
 use crate::gpu::Chipset;
 
+pub(crate) mod booter;
 pub(crate) mod fwsec;
 
 pub(crate) const FIRMWARE_VERSION: &str = "535.113.01";
@@ -22,14 +27,20 @@ pub(crate) const FIRMWARE_VERSION: &str = "535.113.01";
 /// Structure encapsulating the firmware blobs required for the GPU to operate.
 #[expect(dead_code)]
 pub(crate) struct Firmware {
-    booter_load: firmware::Firmware,
-    booter_unload: firmware::Firmware,
+    booter_load: BooterFirmware,
+    booter_unload: BooterFirmware,
     bootloader: firmware::Firmware,
     gsp: firmware::Firmware,
 }
 
 impl Firmware {
-    pub(crate) fn new(dev: &device::Device, chipset: Chipset, ver: &str) -> Result<Firmware> {
+    pub(crate) fn new(
+        dev: &device::Device<device::Bound>,
+        sec2: &Falcon<Sec2>,
+        bar: &Bar0,
+        chipset: Chipset,
+        ver: &str,
+    ) -> Result<Firmware> {
         let mut chip_name = CString::try_from_fmt(fmt!("{chipset}"))?;
         chip_name.make_ascii_lowercase();
         let chip_name = &*chip_name;
@@ -40,8 +51,10 @@ impl Firmware {
         };
 
         Ok(Firmware {
-            booter_load: request("booter_load")?,
-            booter_unload: request("booter_unload")?,
+            booter_load: request("booter_load")
+                .and_then(|fw| BooterFirmware::new(dev, sec2, bar, &fw))?,
+            booter_unload: request("booter_unload")
+                .and_then(|fw| BooterFirmware::new(dev, sec2, bar, &fw))?,
             bootloader: request("bootloader")?,
             gsp: request("gsp")?,
         })
@@ -149,6 +162,52 @@ impl<F: FalconFirmware> FirmwareDmaObject<F, Unsigned> {
         FirmwareDmaObject(self.0, PhantomData)
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+struct BinHdr {
+    pub bin_magic: u32,
+    pub bin_ver: u32,
+    pub bin_size: u32,
+    pub header_offset: u32,
+    pub data_offset: u32,
+    pub data_size: u32,
+}
+unsafe impl FromBytesSized for BinHdr {}
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+struct HsHeaderV2 {
+    pub sig_prod_offset: u32,
+    pub sig_prod_size: u32,
+    pub patch_loc: u32,
+    pub patch_sig: u32,
+    pub meta_data_offset: u32,
+    pub meta_data_size: u32,
+    pub num_sig: u32,
+    pub header_offset: u32,
+    pub header_size: u32,
+}
+unsafe impl FromBytesSized for HsHeaderV2 {}
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+struct HsLoadHeaderV2 {
+    pub os_code_offset: u32,
+    pub os_code_size: u32,
+    pub os_data_offset: u32,
+    pub os_data_size: u32,
+    pub num_apps: u32,
+}
+unsafe impl FromBytesSized for HsLoadHeaderV2 {}
+
+#[repr(C)]
+#[derive(Debug, Clone)]
+struct HsLoadHeaderV2App {
+    pub offset: u32,
+    pub len: u32,
+}
+unsafe impl FromBytesSized for HsLoadHeaderV2App {}
 
 pub(crate) struct ModInfoBuilder<const N: usize>(firmware::ModInfoBuilder<N>);
 
