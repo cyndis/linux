@@ -11,9 +11,13 @@ use crate::firmware::BinHdr;
 use super::RmRiscvUCodeDesc;
 
 pub(crate) struct RiscvFirmware {
+    #[allow(dead_code)]
     pub ucode: DmaObject,
+    #[allow(dead_code)]
     pub code_offset: u32,
+    #[allow(dead_code)]
     pub data_offset: u32,
+    #[allow(dead_code)]
     pub manifest_offset: u32,
     #[allow(dead_code)] // Will be used when bootloader version reporting is implemented
     pub app_version: u32,
