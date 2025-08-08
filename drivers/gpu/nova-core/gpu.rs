@@ -225,6 +225,20 @@ impl PinnedDrop for Gpu {
 }
 
 impl Gpu {
+    /// Load firmware using SEC2 falcon
+    fn load_firmware_sec2(
+        pdev: &pci::Device<device::Bound>,
+        bar: &Bar0,
+        chipset: Chipset,
+    ) -> Result<Firmware> {
+        let sec2_falcon = Falcon::<Sec2>::new(pdev.as_ref(), chipset)?;
+        let resources = FirmwareResources {
+            bar,
+            sec2: Some(&sec2_falcon),
+        };
+        Firmware::new(pdev.as_ref(), resources, chipset, FIRMWARE_VERSION)
+    }
+
     /// Load firmware and create architecture-specific falcons
     fn load_firmware_for_arch(
         pdev: &pci::Device<device::Bound>,
@@ -232,17 +246,11 @@ impl Gpu {
         chipset: Chipset,
     ) -> Result<Firmware> {
         // For now, only SEC2-based architectures are supported
-        let sec2_falcon = Falcon::<Sec2>::new(pdev.as_ref(), chipset)?;
-        let resources = FirmwareResources {
-            bar,
-            sec2: Some(&sec2_falcon),
-        };
-        let fw = Firmware::new(pdev.as_ref(), resources, chipset, FIRMWARE_VERSION)?;
-        Ok(fw)
+        Self::load_firmware_sec2(pdev, bar, chipset)
     }
 
-    /// Execute architecture-specific GSP boot sequence
-    fn boot_gsp_by_arch(
+    /// Boot GSP using SEC2 falcon
+    fn boot_gsp_via_sec2(
         pdev: &pci::Device<device::Bound>,
         bar: &Bar0,
         chipset: Chipset,
@@ -250,7 +258,6 @@ impl Gpu {
         gsp_falcon: &Falcon<Gsp>,
         wpr_meta: &CoherentAllocation<fw::GspFwWprMeta>,
         libos: &GspMemObjects,
-        _fb_layout: &FbLayout,
     ) -> Result<()> {
         let libos_handle = libos.libos_dma_handle();
         let wpr_handle = wpr_meta.dma_handle();
@@ -300,8 +307,23 @@ impl Gpu {
         Ok(())
     }
 
-    /// Run GSP sequencer for SEC2-based architectures only
-    fn maybe_run_sequencer(
+    /// Execute architecture-specific GSP boot sequence
+    fn boot_gsp_by_arch(
+        pdev: &pci::Device<device::Bound>,
+        bar: &Bar0,
+        chipset: Chipset,
+        fw: &Firmware,
+        gsp_falcon: &Falcon<Gsp>,
+        wpr_meta: &CoherentAllocation<fw::GspFwWprMeta>,
+        libos: &GspMemObjects,
+        _fb_layout: &FbLayout,
+    ) -> Result<()> {
+        // For now, only SEC2-based architectures are supported
+        Self::boot_gsp_via_sec2(pdev, bar, chipset, fw, gsp_falcon, wpr_meta, libos)
+    }
+
+    /// Run GSP sequencer for SEC2-based architectures
+    fn run_gsp_sequencer(
         pdev: &pci::Device<device::Bound>,
         bar: &Bar0,
         chipset: Chipset,
@@ -309,7 +331,6 @@ impl Gpu {
         libos: &mut GspMemObjects,
         gsp_falcon: &Falcon<Gsp>,
     ) -> Result<()> {
-        // For now, always run sequencer (only SEC2 architectures supported)
         let libos_dma_handle = libos.libos_dma_handle();
         let sec2_falcon = Falcon::<Sec2>::new(pdev.as_ref(), chipset)?;
 
@@ -337,6 +358,19 @@ impl Gpu {
         }
 
         Ok(())
+    }
+
+    /// Run GSP sequencer for SEC2-based architectures only
+    fn maybe_run_sequencer(
+        pdev: &pci::Device<device::Bound>,
+        bar: &Bar0,
+        chipset: Chipset,
+        fw: &Firmware,
+        libos: &mut GspMemObjects,
+        gsp_falcon: &Falcon<Gsp>,
+    ) -> Result<()> {
+        // For now, always run sequencer (only SEC2 architectures supported)
+        Self::run_gsp_sequencer(pdev, bar, chipset, fw, libos, gsp_falcon)
     }
 
     /// Initialize debugfs for Nova GPU driver.
