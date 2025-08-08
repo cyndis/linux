@@ -117,12 +117,9 @@ impl Chipset {
         }
     }
 
-    #[expect(dead_code)]
+    /// Determine if this chipset needs larger reserved memory allocation.
     pub(crate) fn needs_large_reserved_mem(&self) -> bool {
-        match self.arch() {
-            Architecture::Hopper | Architecture::Blackwell => true,
-            _ => false,
-        }
+        matches!(self.arch(), Architecture::Hopper | Architecture::Blackwell)
     }
 }
 
@@ -141,7 +138,7 @@ impl fmt::Display for Chipset {
 }
 
 /// Enum representation of the GPU generation.
-#[derive(fmt::Debug)]
+#[derive(fmt::Debug, Copy, Clone)]
 pub(crate) enum Architecture {
     Turing = 0x16,
     Ampere = 0x17,

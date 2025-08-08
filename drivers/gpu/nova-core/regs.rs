@@ -11,7 +11,7 @@ use crate::falcon::{
     DmaTrfCmdSize, FalconCoreRev, FalconCoreRevSubversion, FalconFbifMemType, FalconFbifTarget,
     FalconModSelAlgo, FalconSecurityModel, PeregrineCoreSelect,
 };
-use crate::gpu::Chipset;
+use crate::gpu::{Architecture, Chipset};
 use kernel::prelude::*;
 
 // PMC
