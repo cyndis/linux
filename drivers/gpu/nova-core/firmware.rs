@@ -175,6 +175,29 @@ fn get_signature_section(chipset: Chipset) -> Result<&'static str> {
     }
 }
 
+/// Architecture-specific firmware data.
+///
+/// Different GPU architectures require different firmware components:
+/// - SEC2-based architectures (Turing/Ampere/Ada) use booter_load/unload firmware
+/// - FSP-based architectures (Hopper/Blackwell) use FMC firmware
+#[expect(dead_code)]
+pub(crate) enum ArchFirmwareData {
+    /// Firmware data for SEC2-based architectures
+    Sec2 {
+        /// Firmware for loading GSP via SEC2
+        booter_load: BooterFirmware,
+        /// Firmware for unloading GSP via SEC2
+        booter_unload: BooterFirmware,
+    },
+    /// Firmware data for FSP-based architectures
+    Fsp {
+        /// FMC firmware image data (only the .image section)
+        fmc_image: DmaObject,
+        /// Full FMC ELF data (for signature extraction)
+        fmc_full: DmaObject,
+    },
+}
+
 /// Structure encapsulating the firmware blobs required for the GPU to operate.
 #[expect(dead_code)]
 pub(crate) struct Firmware {
@@ -347,7 +370,6 @@ impl FalconUCodeDesc {
             FalconUCodeDesc::V3(v3) => v3.interface_offset,
         }
     }
-
 
     pub(crate) fn dmem_load_size(&self) -> u32 {
         match self {
