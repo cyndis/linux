@@ -10,7 +10,7 @@ use crate::falcon::{gsp::Gsp, sec2::Sec2, Falcon};
 use crate::fb::FbLayout;
 use crate::fb::SysmemFlush;
 use crate::firmware::fwsec::{FwsecCommand, FwsecFirmware};
-use crate::firmware::{Firmware, FIRMWARE_VERSION};
+use crate::firmware::{Firmware, FirmwareResources, FIRMWARE_VERSION};
 use crate::gfw;
 use crate::gsp::{self, GspMemObjects};
 use crate::irq;
@@ -377,13 +377,12 @@ impl Gpu {
 
         let sec2_falcon = Falcon::<Sec2>::new(pdev.as_ref(), spec.chipset)?;
 
-        let fw = Firmware::new(
-            pdev.as_ref(),
-            &sec2_falcon,
+        let resources = FirmwareResources {
             bar,
-            spec.chipset,
-            FIRMWARE_VERSION,
-        )?;
+            sec2: Some(&sec2_falcon),
+        };
+
+        let fw = Firmware::new(pdev.as_ref(), resources, spec.chipset, FIRMWARE_VERSION)?;
 
         let fb_layout = FbLayout::new(spec.chipset, bar, &fw)?;
         dev_dbg!(pdev.as_ref(), "{:#?}\n", fb_layout);
