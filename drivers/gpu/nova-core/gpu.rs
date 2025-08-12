@@ -20,7 +20,7 @@ use crate::vbios::Vbios;
 
 use crate::debugfs::NovaDebugfs;
 use core::fmt;
-use kernel::sync::{Arc, Mutex};
+use kernel::sync::Mutex;
 
 static mut NOVA_DEBUGFS: Option<Arc<Mutex<NovaDebugfs>>> = None;
 
