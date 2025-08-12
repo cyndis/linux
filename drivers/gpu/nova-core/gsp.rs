@@ -710,6 +710,7 @@ pub(crate) fn build_wpr_meta(
                 },
             },
             verified: 0,
+            pmuReservedSize: crate::fb::calc_pmu_reserved_size() as u32,
             ..Default::default()
         }
     )?;
