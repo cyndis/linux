@@ -16,6 +16,7 @@ use crate::build_assert;
 /// ```
 /// use kernel::transmute::FromBytes;
 ///
+/// # fn test() -> Option<()> {
 /// let foo = [1, 2, 3, 4];
 ///
 /// let result = u32::from_bytes(&foo)?;
@@ -25,6 +26,7 @@ use crate::build_assert;
 ///
 /// #[cfg(target_endian = "big")]
 /// assert_eq!(*result, 0x1020304);
+/// # Some(()) }
 /// ```
 ///
 /// # Safety
