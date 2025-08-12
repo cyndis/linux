@@ -154,13 +154,10 @@ impl FirmwareSignature<FwsecFirmware> for Bcrt30Rsa3kSignature {}
 /// available and we have a way to transmute objects implementing FromBytes, e.g.:
 /// https://lore.kernel.org/lkml/20250330234039.29814-1-christiansantoslima21@gmail.com/
 unsafe fn transmute<T: Sized + FromBytes>(fw: &DmaObject, offset: usize) -> Result<&T> {
-    if (fw.start_ptr() as usize + offset) % align_of::<T>() != 0 {
-        return Err(EINVAL);
+    unsafe {
+        fw.as_slice(offset, size_of::<T>())
+            .and_then(move |s| T::from_bytes(s).ok_or(EINVAL))
     }
-
-    // SAFETY: we have checked that the pointer is properly aligned that its pointed memory is
-    // large enough the contains an instance of `T`, which implements `FromBytes`.
-    Ok(unsafe { &*(fw.start_ptr().add(offset).cast::<T>()) })
 }
 
 /// Reinterpret the area starting from `offset` in `fw` as a mutable instance of `T` (which must
