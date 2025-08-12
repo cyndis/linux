@@ -416,7 +416,7 @@ impl Gpu {
         );
 
         sec2_falcon.reset(&bar)?;
-        sec2_falcon.dma_load(&bar, &fw.booter_load)?;
+        sec2_falcon.dma_load(&bar, fw.booter_load().ok_or(EIO)?)?;
         let (mbox0, mbox1) = sec2_falcon.boot(
             &bar,
             Some(wpr_handle as u32),

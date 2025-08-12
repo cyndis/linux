@@ -180,7 +180,7 @@ fn get_signature_section(chipset: Chipset) -> Result<&'static str> {
 /// Different GPU architectures require different firmware components:
 /// - SEC2-based architectures (Turing/Ampere/Ada) use booter_load/unload firmware
 /// - FSP-based architectures (Hopper/Blackwell) use FMC firmware
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) enum ArchFirmwareData {
     /// Firmware data for SEC2-based architectures
     Sec2 {
@@ -199,17 +199,73 @@ pub(crate) enum ArchFirmwareData {
 }
 
 /// Structure encapsulating the firmware blobs required for the GPU to operate.
-#[expect(dead_code)]
+///
+/// Contains common firmware components needed by all GPU architectures,
+/// with architecture-specific components stored in the `arch_data` field.
 pub(crate) struct Firmware {
-    pub booter_load: BooterFirmware,
-    pub booter_unload: BooterFirmware,
+    /// Common firmware components for all architectures
     pub bootloader: RiscvFirmware,
     pub gsp: RadixFirmware,
     pub gsp_sigs: DmaObject,
     pub gsp_desc: RmRiscvUCodeDesc,
+
+    /// Architecture-specific firmware components
+    pub arch_data: ArchFirmwareData,
 }
 
 impl Firmware {
+    /// Get booter_load firmware for SEC2-based architectures.
+    /// Returns None for FSP-based architectures.
+    pub(crate) fn booter_load(&self) -> Option<&BooterFirmware> {
+        match &self.arch_data {
+            ArchFirmwareData::Sec2 { booter_load, .. } => Some(booter_load),
+            ArchFirmwareData::Fsp { .. } => None,
+        }
+    }
+
+    /// Get booter_unload firmware for SEC2-based architectures.
+    /// Returns None for FSP-based architectures.
+    #[allow(dead_code)]
+    pub(crate) fn booter_unload(&self) -> Option<&BooterFirmware> {
+        match &self.arch_data {
+            ArchFirmwareData::Sec2 { booter_unload, .. } => Some(booter_unload),
+            ArchFirmwareData::Fsp { .. } => None,
+        }
+    }
+
+    /// Get FMC data for FSP-based architectures.
+    /// Returns (fmc_image, fmc_full) tuple, or None for SEC2-based architectures.
+    #[allow(dead_code)]
+    pub(crate) fn fmc_data(&self) -> Option<(&DmaObject, &DmaObject)> {
+        match &self.arch_data {
+            ArchFirmwareData::Sec2 { .. } => None,
+            ArchFirmwareData::Fsp {
+                fmc_image,
+                fmc_full,
+            } => Some((fmc_image, fmc_full)),
+        }
+    }
+
+    /// Get just the FMC image data for FSP-based architectures.
+    /// Returns None for SEC2-based architectures.
+    #[allow(dead_code)]
+    pub(crate) fn fmc_image(&self) -> Option<&DmaObject> {
+        match &self.arch_data {
+            ArchFirmwareData::Sec2 { .. } => None,
+            ArchFirmwareData::Fsp { fmc_image, .. } => Some(fmc_image),
+        }
+    }
+
+    /// Get the full FMC ELF data for FSP-based architectures.
+    /// Returns None for SEC2-based architectures.
+    #[allow(dead_code)]
+    pub(crate) fn fmc_full(&self) -> Option<&DmaObject> {
+        match &self.arch_data {
+            ArchFirmwareData::Sec2 { .. } => None,
+            ArchFirmwareData::Fsp { fmc_full, .. } => Some(fmc_full),
+        }
+    }
+
     fn firmware_path(chipset: Chipset, ver: &str, name: &str) -> Result<CString> {
         let mut chip_name = CString::try_from_fmt(fmt!("{}", chipset))?;
         chip_name.make_ascii_lowercase();
@@ -259,14 +315,16 @@ impl Firmware {
             .and_then(|data| DmaObject::from_data(dev, data))?;
 
         Ok(Firmware {
-            booter_load: request("booter_load")
-                .and_then(|fw| BooterFirmware::new(dev, sec2, bar, &fw))?,
-            booter_unload: request("booter_unload")
-                .and_then(|fw| BooterFirmware::new(dev, sec2, bar, &fw))?,
             bootloader: request("bootloader").and_then(|fw| RiscvFirmware::new(dev, &fw))?,
             gsp,
             gsp_sigs,
             gsp_desc,
+            arch_data: ArchFirmwareData::Sec2 {
+                booter_load: request("booter_load")
+                    .and_then(|fw| BooterFirmware::new(dev, sec2, bar, &fw))?,
+                booter_unload: request("booter_unload")
+                    .and_then(|fw| BooterFirmware::new(dev, sec2, bar, &fw))?,
+            },
         })
     }
 }
