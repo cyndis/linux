@@ -153,13 +153,7 @@ impl FirmwareSignature<FwsecFirmware> for Bcrt30Rsa3kSignature {}
 /// TODO[TRSM][COHA]: Remove this and `transmute_mut` once `CoherentAllocation::as_slice` is
 /// available and we have a way to transmute objects implementing FromBytes, e.g.:
 /// https://lore.kernel.org/lkml/20250330234039.29814-1-christiansantoslima21@gmail.com/
-unsafe fn transmute<'a, 'b, T: Sized + FromBytes>(
-    fw: &'a DmaObject,
-    offset: usize,
-) -> Result<&'b T> {
-    if offset + size_of::<T>() > fw.size() {
-        return Err(EINVAL);
-    }
+unsafe fn transmute<T: Sized + FromBytes>(fw: &DmaObject, offset: usize) -> Result<&T> {
     if (fw.start_ptr() as usize + offset) % align_of::<T>() != 0 {
         return Err(EINVAL);
     }
@@ -280,12 +274,11 @@ impl FirmwareDmaObject<FwsecFirmware, Unsigned> {
                 continue;
             }
 
+            let dmem_base = app.dmem_base;
+
             // SAFETY: we have exclusive access to `dma_object`.
             let dmem_mapper: &mut FalconAppifDmemmapperV3 = unsafe {
-                transmute_mut(
-                    &mut dma_object,
-                    (desc.imem_load_size + app.dmem_base) as usize,
-                )
+                transmute_mut(&mut dma_object, (desc.imem_load_size + dmem_base) as usize)
             }?;
 
             // SAFETY: we have exclusive access to `dma_object`.
