@@ -50,7 +50,7 @@ pub(crate) fn wait_on_result<R, F: FnMut() -> Option<Result<R>>>(
     timeout: Delta,
     mut cond: F,
 ) -> Result<R> {
-    let start_time = Instant::now();
+    let start_time = Instant::<Monotonic>::now();
 
     loop {
         if let Some(ret) = cond() {
