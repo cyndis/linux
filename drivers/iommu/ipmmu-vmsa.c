@@ -873,8 +873,14 @@ static void ipmmu_release_device(struct device *dev)
 	arm_iommu_release_mapping(mmu->mapping);
 }
 
+static int ipmmu_def_domain_type(struct device *dev)
+{
+	return IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU) ? IOMMU_DOMAIN_IDENTITY : 0;
+}
+
 static const struct iommu_ops ipmmu_ops = {
 	.identity_domain = &ipmmu_iommu_identity_domain,
+	.def_domain_type = ipmmu_def_domain_type,
 	.domain_alloc_paging = ipmmu_domain_alloc_paging,
 	.probe_device = ipmmu_probe_device,
 	.release_device = ipmmu_release_device,

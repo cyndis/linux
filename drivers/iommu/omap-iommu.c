@@ -1712,8 +1712,14 @@ static int omap_iommu_of_xlate(struct device *dev, const struct of_phandle_args 
 	return 0;
 }
 
+static int omap_iommu_def_domain_type(struct device *dev)
+{
+	return IOMMU_DOMAIN_IDENTITY;
+}
+
 static const struct iommu_ops omap_iommu_ops = {
 	.identity_domain = &omap_iommu_identity_domain,
+	.def_domain_type = omap_iommu_def_domain_type,
 	.domain_alloc_paging = omap_iommu_domain_alloc_paging,
 	.probe_device	= omap_iommu_probe_device,
 	.release_device	= omap_iommu_release_device,

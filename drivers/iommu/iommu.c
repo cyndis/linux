@@ -1884,18 +1884,6 @@ static int iommu_get_default_domain_type(struct iommu_group *group,
 
 	lockdep_assert_held(&group->mutex);
 
-	/*
-	 * ARM32 drivers supporting CONFIG_ARM_DMA_USE_IOMMU can declare an
-	 * identity_domain and it will automatically become their default
-	 * domain. Later on ARM_DMA_USE_IOMMU will install its UNMANAGED domain.
-	 * Override the selection to IDENTITY.
-	 */
-	if (IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU)) {
-		static_assert(!(IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU) &&
-				IS_ENABLED(CONFIG_IOMMU_DMA)));
-		driver_type = IOMMU_DOMAIN_IDENTITY;
-	}
-
 	for_each_group_device(group, gdev) {
 		driver_type = iommu_get_def_domain_type(group, gdev->dev,
 							driver_type);
@@ -1912,11 +1900,11 @@ static int iommu_get_default_domain_type(struct iommu_group *group,
 	}
 
 	/*
-	 * If the common dma ops are not selected in kconfig then we cannot use
-	 * IOMMU_DOMAIN_DMA at all. Force IDENTITY if nothing else has been
-	 * selected.
+	 * Without an IOMMU DMA implementation, force IDENTITY if the driver
+	 * has not selected a domain type.
 	 */
-	if (!IS_ENABLED(CONFIG_IOMMU_DMA)) {
+	if (!IS_ENABLED(CONFIG_IOMMU_DMA) &&
+	    !IS_ENABLED(CONFIG_ARM_DMA_USE_IOMMU)) {
 		if (WARN_ON(driver_type == IOMMU_DOMAIN_DMA))
 			return -1;
 		if (!driver_type)

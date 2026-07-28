@@ -578,8 +578,14 @@ static int mtk_iommu_v1_hw_init(const struct mtk_iommu_v1_data *data)
 	return 0;
 }
 
+static int mtk_iommu_v1_def_domain_type(struct device *dev)
+{
+	return IOMMU_DOMAIN_IDENTITY;
+}
+
 static const struct iommu_ops mtk_iommu_v1_ops = {
 	.identity_domain = &mtk_iommu_v1_identity_domain,
+	.def_domain_type = mtk_iommu_v1_def_domain_type,
 	.domain_alloc_paging = mtk_iommu_v1_domain_alloc_paging,
 	.probe_device	= mtk_iommu_v1_probe_device,
 	.probe_finalize = mtk_iommu_v1_probe_finalize,
