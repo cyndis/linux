@@ -1688,6 +1688,9 @@ static int __arm_iommu_attach_device(struct device *dev,
 {
 	int err;
 
+	if (!mapping->bitmaps)
+		return -EINVAL;
+
 	err = iommu_attach_device(mapping->domain, dev);
 	if (err)
 		return err;
@@ -1759,7 +1762,7 @@ void arm_iommu_detach_device(struct device *dev)
 	def_domain = iommu_get_domain_for_dev(dev);
 	if (iommu_is_dma_domain(def_domain)) {
 		to_dma_iommu_mapping(dev) = def_domain->arm_cookie;
-		set_dma_ops(dev, &iommu_ops);
+		set_dma_ops(dev, def_domain->arm_cookie->bitmaps ? &iommu_ops : NULL);
 	} else {
 		to_dma_iommu_mapping(dev) = NULL;
 		set_dma_ops(dev, NULL);
@@ -1771,13 +1774,36 @@ EXPORT_SYMBOL_GPL(arm_iommu_detach_device);
 
 static void arm_setup_iommu_dma_ops(struct device *dev)
 {
-	struct dma_iommu_mapping *mapping;
+	struct dma_iommu_mapping *mapping = to_dma_iommu_mapping(dev);
 	u64 dma_base = 0, size = 1ULL << 32;
 
 	if (dev->dma_range_map) {
 		dma_base = dma_range_map_min(dev->dma_range_map);
 		size = dma_range_map_max(dev->dma_range_map) - dma_base;
 	}
+
+	/*
+	 * An existing cookie means the core owns the domain. Only set the
+	 * per-binding DMA ops. IOVAs are allocated from the whole aperture,
+	 * so the device's dma-ranges must cover it.
+	 */
+	if (mapping) {
+		const struct iommu_domain_geometry *geo =
+			&mapping->domain->geometry;
+
+		if (!mapping->bitmaps)
+			return;
+
+		if (dma_base > geo->aperture_start ||
+		    dma_base + size < geo->aperture_end) {
+			dev_err(dev, "dma-ranges do not cover the IOMMU aperture\n");
+			return;
+		}
+
+		set_dma_ops(dev, &iommu_ops);
+		return;
+	}
+
 	mapping = arm_iommu_create_mapping(dev, dma_base, size);
 	if (IS_ERR(mapping)) {
 		pr_warn("Failed to create %llu-byte IOMMU mapping for device %s\n",
@@ -1800,6 +1826,9 @@ static void arm_teardown_iommu_dma_ops(struct device *dev)
 	struct dma_iommu_mapping *mapping = to_dma_iommu_mapping(dev);
 
 	if (!mapping)
+		return;
+
+	if (!mapping->owns_domain)
 		return;
 
 	arm_iommu_detach_device(dev);
