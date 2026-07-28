@@ -25,6 +25,7 @@
 #include <linux/sizes.h>
 #include <linux/cma.h>
 
+#include <asm/device.h>
 #include <asm/page.h>
 #include <asm/highmem.h>
 #include <asm/cacheflush.h>
@@ -1522,6 +1523,86 @@ static void __arm_iommu_free_mapping(struct dma_iommu_mapping *mapping)
 }
 
 /**
+ * iommu_get_dma_cookie - Allocate an ARM DMA domain cookie
+ * @domain: the domain
+ */
+int iommu_get_dma_cookie(struct iommu_domain *domain)
+{
+	struct dma_iommu_mapping *mapping;
+
+	if (domain->cookie_type != IOMMU_COOKIE_NONE)
+		return -EEXIST;
+
+	mapping = kzalloc_obj(*mapping);
+	if (!mapping)
+		return -ENOMEM;
+
+	mapping->domain = domain;
+	spin_lock_init(&mapping->lock);
+	domain->cookie_type = IOMMU_COOKIE_ARM_DMA;
+	domain->arm_cookie = mapping;
+
+	return 0;
+}
+
+/**
+ * iommu_put_dma_cookie - Free domain cookie for ARM IOMMU-based DMA API
+ * @domain: the domain being freed
+ */
+void iommu_put_dma_cookie(struct iommu_domain *domain)
+{
+	__arm_iommu_free_mapping(domain->arm_cookie);
+}
+
+/**
+ * iommu_setup_dma_ops - Initialize and record the device's DMA API domain cookie
+ * @dev: the device
+ * @domain: the group's new default domain
+ *
+ * Allocates IOVA bookkeeping based on the domain's geometry, which must be
+ * initialized by attaching the domain first. The aperture must fit within
+ * the 32-bit DMA address space. DMA ops are installed by arch_setup_dma_ops().
+ */
+void iommu_setup_dma_ops(struct device *dev, struct iommu_domain *domain)
+{
+	const struct iommu_domain_geometry *geo = &domain->geometry;
+	struct dma_iommu_mapping *mapping;
+	u64 size;
+
+	if (!iommu_is_dma_domain(domain)) {
+		to_dma_iommu_mapping(dev) = NULL;
+		return;
+	}
+
+	mapping = domain->arm_cookie;
+	to_dma_iommu_mapping(dev) = mapping;
+	if (mapping->bitmaps)
+		return;
+
+	if (geo->aperture_start > geo->aperture_end ||
+	    geo->aperture_end > DMA_BIT_MASK(32))
+		goto out_err;
+
+	size = (u64)geo->aperture_end - geo->aperture_start + 1;
+	if (__arm_iommu_init_mapping(mapping, geo->aperture_start, size))
+		goto out_err;
+
+	return;
+
+out_err:
+	dev_warn(dev, "Failed to initialize IOMMU DMA mapping; retaining platform DMA ops\n");
+}
+
+/**
+ * iommu_teardown_dma_ops - Clear a device's DMA API domain cookie
+ * @dev: the device
+ */
+void iommu_teardown_dma_ops(struct device *dev)
+{
+	to_dma_iommu_mapping(dev) = NULL;
+}
+
+/**
  * arm_iommu_create_mapping
  * @dev: pointer to the client device (for IOMMU calls)
  * @base: start address of the valid IO address space
@@ -1531,37 +1612,38 @@ static void __arm_iommu_free_mapping(struct dma_iommu_mapping *mapping)
  * IO address ranges, which is required to perform memory allocation and
  * mapping with IOMMU aware functions.
  *
+ * Unlike a default domain set up by the IOMMU core, the returned mapping owns
+ * the domain it describes and releases it along with the last reference.
+ *
  * The client device need to be attached to the mapping with
  * arm_iommu_attach_device function.
  */
 struct dma_iommu_mapping *
 arm_iommu_create_mapping(struct device *dev, dma_addr_t base, u64 size)
 {
-	struct dma_iommu_mapping *mapping;
+	struct iommu_domain *domain;
 	int err;
 
-	mapping = kzalloc_obj(*mapping);
-	if (!mapping)
-		return ERR_PTR(-ENOMEM);
+	domain = iommu_paging_domain_alloc(dev);
+	if (IS_ERR(domain))
+		return ERR_CAST(domain);
 
-	err = __arm_iommu_init_mapping(mapping, base, size);
-	if (err) {
-		kfree(mapping);
-		return ERR_PTR(err);
-	}
+	err = iommu_get_dma_cookie(domain);
+	if (err)
+		goto free_domain;
 
-	spin_lock_init(&mapping->lock);
+	err = __arm_iommu_init_mapping(domain->arm_cookie, base, size);
+	if (err)
+		goto free_domain;
 
-	mapping->domain = iommu_paging_domain_alloc(dev);
-	if (IS_ERR(mapping->domain)) {
-		err = PTR_ERR(mapping->domain);
+	domain->arm_cookie->owns_domain = true;
+	kref_init(&domain->arm_cookie->kref);
 
-		__arm_iommu_free_mapping(mapping);
-		return ERR_PTR(err);
-	}
+	return domain->arm_cookie;
 
-	kref_init(&mapping->kref);
-	return mapping;
+free_domain:
+	iommu_domain_free(domain);
+	return ERR_PTR(err);
 }
 EXPORT_SYMBOL_GPL(arm_iommu_create_mapping);
 
@@ -1570,8 +1652,8 @@ static void release_iommu_mapping(struct kref *kref)
 	struct dma_iommu_mapping *mapping =
 		container_of(kref, struct dma_iommu_mapping, kref);
 
+	/* Frees mapping too, via iommu_put_dma_cookie(). */
 	iommu_domain_free(mapping->domain);
-	__arm_iommu_free_mapping(mapping);
 }
 
 static int extend_iommu_mapping(struct dma_iommu_mapping *mapping)
@@ -1594,8 +1676,10 @@ static int extend_iommu_mapping(struct dma_iommu_mapping *mapping)
 
 void arm_iommu_release_mapping(struct dma_iommu_mapping *mapping)
 {
-	if (mapping)
-		kref_put(&mapping->kref, release_iommu_mapping);
+	if (!mapping || !mapping->owns_domain)
+		return;
+
+	kref_put(&mapping->kref, release_iommu_mapping);
 }
 EXPORT_SYMBOL_GPL(arm_iommu_release_mapping);
 
@@ -1608,7 +1692,9 @@ static int __arm_iommu_attach_device(struct device *dev,
 	if (err)
 		return err;
 
-	kref_get(&mapping->kref);
+	if (mapping->owns_domain)
+		kref_get(&mapping->kref);
+
 	to_dma_iommu_mapping(dev) = mapping;
 
 	pr_debug("Attached IOMMU controller to %s device.\n", dev_name(dev));
@@ -1646,12 +1732,13 @@ EXPORT_SYMBOL_GPL(arm_iommu_attach_device);
  * arm_iommu_detach_device
  * @dev: valid struct device pointer
  *
- * Detaches the provided device from a previously attached map.
- * This overwrites the dma_ops pointer with appropriate non-IOMMU ops.
+ * Restore the device's default DMA mapping / ops -- either for the default DMA
+ * domain, or NULL.
  */
 void arm_iommu_detach_device(struct device *dev)
 {
 	struct dma_iommu_mapping *mapping;
+	struct iommu_domain *def_domain;
 
 	mapping = to_dma_iommu_mapping(dev);
 	if (!mapping) {
@@ -1659,10 +1746,24 @@ void arm_iommu_detach_device(struct device *dev)
 		return;
 	}
 
+	/*
+	 * Allow callers who think they're detaching the legacy UNMANAGED
+	 * domain to work.
+	 */
+	if (!mapping->owns_domain)
+		return;
+
 	iommu_detach_device(mapping->domain, dev);
 	kref_put(&mapping->kref, release_iommu_mapping);
-	to_dma_iommu_mapping(dev) = NULL;
-	set_dma_ops(dev, NULL);
+
+	def_domain = iommu_get_domain_for_dev(dev);
+	if (iommu_is_dma_domain(def_domain)) {
+		to_dma_iommu_mapping(dev) = def_domain->arm_cookie;
+		set_dma_ops(dev, &iommu_ops);
+	} else {
+		to_dma_iommu_mapping(dev) = NULL;
+		set_dma_ops(dev, NULL);
+	}
 
 	pr_debug("Detached IOMMU controller from %s device.\n", dev_name(dev));
 }
