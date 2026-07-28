@@ -1470,6 +1470,57 @@ static const struct dma_map_ops iommu_ops = {
 	.sync_sg_for_device	= arm_iommu_sync_sg_for_device,
 };
 
+static int __arm_iommu_init_mapping(struct dma_iommu_mapping *mapping,
+				   dma_addr_t base, u64 size)
+{
+	unsigned int bits, bitmap_size;
+	unsigned long **bitmaps;
+	int extensions = 1;
+
+	/* currently only 32-bit DMA address space is supported */
+	if (size > DMA_BIT_MASK(32) + 1)
+		return -ERANGE;
+
+	bits = size >> PAGE_SHIFT;
+	bitmap_size = BITS_TO_LONGS(bits) * sizeof(long);
+	if (!bitmap_size)
+		return -EINVAL;
+
+	if (bitmap_size > PAGE_SIZE) {
+		extensions = bitmap_size / PAGE_SIZE;
+		bitmap_size = PAGE_SIZE;
+	}
+
+	bitmaps = kcalloc(extensions, sizeof(*bitmaps), GFP_KERNEL);
+	if (!bitmaps)
+		return -ENOMEM;
+
+	bitmaps[0] = kzalloc(bitmap_size, GFP_KERNEL);
+	if (!bitmaps[0]) {
+		kfree(bitmaps);
+		return -ENOMEM;
+	}
+
+	mapping->bitmap_size = bitmap_size;
+	mapping->nr_bitmaps = 1;
+	mapping->extensions = extensions;
+	mapping->base = base;
+	mapping->bits = BITS_PER_BYTE * bitmap_size;
+	mapping->bitmaps = bitmaps;
+
+	return 0;
+}
+
+static void __arm_iommu_free_mapping(struct dma_iommu_mapping *mapping)
+{
+	int i;
+
+	for (i = 0; i < mapping->nr_bitmaps; i++)
+		kfree(mapping->bitmaps[i]);
+	kfree(mapping->bitmaps);
+	kfree(mapping);
+}
+
 /**
  * arm_iommu_create_mapping
  * @dev: pointer to the client device (for IOMMU calls)
@@ -1486,75 +1537,41 @@ static const struct dma_map_ops iommu_ops = {
 struct dma_iommu_mapping *
 arm_iommu_create_mapping(struct device *dev, dma_addr_t base, u64 size)
 {
-	unsigned int bits = size >> PAGE_SHIFT;
-	unsigned int bitmap_size = BITS_TO_LONGS(bits) * sizeof(long);
 	struct dma_iommu_mapping *mapping;
-	int extensions = 1;
-	int err = -ENOMEM;
+	int err;
 
-	/* currently only 32-bit DMA address space is supported */
-	if (size > DMA_BIT_MASK(32) + 1)
-		return ERR_PTR(-ERANGE);
-
-	if (!bitmap_size)
-		return ERR_PTR(-EINVAL);
-
-	if (bitmap_size > PAGE_SIZE) {
-		extensions = bitmap_size / PAGE_SIZE;
-		bitmap_size = PAGE_SIZE;
-	}
-
-	mapping = kzalloc_obj(struct dma_iommu_mapping);
+	mapping = kzalloc_obj(*mapping);
 	if (!mapping)
-		goto err;
+		return ERR_PTR(-ENOMEM);
 
-	mapping->bitmap_size = bitmap_size;
-	mapping->bitmaps = kcalloc(extensions, sizeof(unsigned long *),
-				   GFP_KERNEL);
-	if (!mapping->bitmaps)
-		goto err2;
-
-	mapping->bitmaps[0] = kzalloc(bitmap_size, GFP_KERNEL);
-	if (!mapping->bitmaps[0])
-		goto err3;
-
-	mapping->nr_bitmaps = 1;
-	mapping->extensions = extensions;
-	mapping->base = base;
-	mapping->bits = BITS_PER_BYTE * bitmap_size;
+	err = __arm_iommu_init_mapping(mapping, base, size);
+	if (err) {
+		kfree(mapping);
+		return ERR_PTR(err);
+	}
 
 	spin_lock_init(&mapping->lock);
 
 	mapping->domain = iommu_paging_domain_alloc(dev);
 	if (IS_ERR(mapping->domain)) {
 		err = PTR_ERR(mapping->domain);
-		goto err4;
+
+		__arm_iommu_free_mapping(mapping);
+		return ERR_PTR(err);
 	}
 
 	kref_init(&mapping->kref);
 	return mapping;
-err4:
-	kfree(mapping->bitmaps[0]);
-err3:
-	kfree(mapping->bitmaps);
-err2:
-	kfree(mapping);
-err:
-	return ERR_PTR(err);
 }
 EXPORT_SYMBOL_GPL(arm_iommu_create_mapping);
 
 static void release_iommu_mapping(struct kref *kref)
 {
-	int i;
 	struct dma_iommu_mapping *mapping =
 		container_of(kref, struct dma_iommu_mapping, kref);
 
 	iommu_domain_free(mapping->domain);
-	for (i = 0; i < mapping->nr_bitmaps; i++)
-		kfree(mapping->bitmaps[i]);
-	kfree(mapping->bitmaps);
-	kfree(mapping);
+	__arm_iommu_free_mapping(mapping);
 }
 
 static int extend_iommu_mapping(struct dma_iommu_mapping *mapping)
