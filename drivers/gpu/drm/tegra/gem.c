@@ -664,11 +664,7 @@ static void tegra_gem_prime_unmap_dma_buf(struct dma_buf_attachment *attach,
 					  struct sg_table *sgt,
 					  enum dma_data_direction dir)
 {
-	struct drm_gem_object *gem = attach->dmabuf->priv;
-	struct tegra_bo *bo = to_tegra_bo(gem);
-
-	if (bo->pages)
-		dma_unmap_sgtable(attach->dev, sgt, dir, 0);
+	dma_unmap_sgtable(attach->dev, sgt, dir, 0);
 
 	sg_free_table(sgt);
 	kfree(sgt);
