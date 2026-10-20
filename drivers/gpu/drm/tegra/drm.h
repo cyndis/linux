@@ -36,6 +36,7 @@ struct tegra_drm {
 
 	struct iommu_domain *domain;
 	bool use_explicit_iommu;
+	bool use_dma_iommu;
 	struct mutex mm_lock;
 	struct drm_mm mm;
 

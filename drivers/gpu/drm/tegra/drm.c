@@ -964,8 +964,13 @@ int host1x_client_iommu_attach(struct host1x_client *client)
 	 * domain. This allows using the IOMMU-backed DMA API.
 	 */
 	if (domain && domain->type != IOMMU_DOMAIN_IDENTITY &&
-	    domain != tegra->domain)
+	    domain != tegra->domain) {
+		if (domain->type == IOMMU_DOMAIN_DMA ||
+		    domain->type == IOMMU_DOMAIN_DMA_FQ)
+			tegra->use_dma_iommu = true;
+
 		return 0;
+	}
 
 	if (tegra->domain) {
 		group = iommu_group_get(client->dev);
@@ -1230,6 +1235,12 @@ static int host1x_drm_probe(struct host1x_device *dev)
 		iommu_domain_free(tegra->domain);
 		tegra->domain = NULL;
 		iova_cache_put();
+	}
+
+	if (tegra->use_dma_iommu) {
+		err = dma_set_mask_and_coherent(&dev->dev, DMA_BIT_MASK(64));
+		if (err)
+			goto device;
 	}
 
 	if (tegra->hub) {

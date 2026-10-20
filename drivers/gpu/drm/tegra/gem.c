@@ -111,10 +111,6 @@ static struct host1x_bo_mapping *tegra_bo_pin(struct device *dev, struct host1x_
 	}
 
 	if (obj->pages) {
-		/*
-		 * If the buffer object was allocated from the explicit IOMMU
-		 * API code paths, construct an SG table from the pages.
-		 */
 		err = sg_alloc_table_from_pages(map->sgt, obj->pages, obj->num_pages, 0, gem->size,
 						GFP_KERNEL);
 		if (err < 0)
@@ -134,6 +130,8 @@ static struct host1x_bo_mapping *tegra_bo_pin(struct device *dev, struct host1x_
 	err = dma_map_sgtable(dev, map->sgt, direction, 0);
 	if (err)
 		goto free_sgt;
+
+	err = sgt_dma_count_chunks(map->sgt);
 
 out:
 	/*
@@ -379,15 +377,17 @@ static int tegra_bo_alloc(struct drm_device *drm, struct tegra_bo *bo)
 	struct tegra_drm *tegra = drm->dev_private;
 	int err;
 
-	if (tegra->domain) {
+	if (tegra->domain || tegra->use_dma_iommu) {
 		err = tegra_bo_get_pages(drm, bo);
 		if (err < 0)
 			return err;
 
-		err = tegra_bo_iommu_map(tegra, bo);
-		if (err < 0) {
-			tegra_bo_free(drm, bo);
-			return err;
+		if (tegra->domain) {
+			err = tegra_bo_iommu_map(tegra, bo);
+			if (err < 0) {
+				tegra_bo_free(drm, bo);
+				return err;
+			}
 		}
 	} else {
 		size_t size = bo->gem.size;

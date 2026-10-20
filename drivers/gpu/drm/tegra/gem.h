@@ -37,7 +37,9 @@ struct tegra_bo_tiling {
  *
  * Buffer source  | Mapping API(*)  | Fields
  * ---------------+-----------------+---------------
- * Allocated here | DMA API         | iova (IOVA mapped to drm->dev), vaddr (CPU VA)
+ * Allocated here | DMA API, IOMMU  | pages/num_pages (Phys. memory), sgt (Mapped to drm->dev)
+ *
+ * Allocated here | DMA API, direct | iova (DMA address on drm->dev), vaddr (CPU VA)
  *
  * Allocated here | IOMMU API       | pages/num_pages (Phys. memory), sgt (Mapped to drm->dev),
  *                                  | iova/size (Mapped to domain)
